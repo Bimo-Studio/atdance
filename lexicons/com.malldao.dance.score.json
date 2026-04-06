@@ -1,0 +1,55 @@
+{
+  "lexicon": 1,
+  "id": "com.malldao.dance.score",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "Single-play score for ATDance (self-hosted PDS writes).",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "songId",
+          "chartHash",
+          "score",
+          "grade",
+          "maxCombo",
+          "judgmentCounts",
+          "clientBuild",
+          "playedAt"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Schema revision for migrations."
+          },
+          "songId": { "type": "string", "maxLength": 256 },
+          "chartHash": { "type": "string", "maxLength": 128 },
+          "score": { "type": "number" },
+          "grade": { "type": "string", "maxLength": 16 },
+          "maxCombo": { "type": "integer", "minimum": 0 },
+          "judgmentCounts": {
+            "type": "ref",
+            "ref": "#judgmentCounts"
+          },
+          "clientBuild": { "type": "string", "maxLength": 128 },
+          "playedAt": { "type": "string", "format": "datetime" },
+          "replayUri": { "type": "string", "format": "uri" }
+        }
+      }
+    },
+    "judgmentCounts": {
+      "type": "object",
+      "required": ["perfect", "great", "good", "bad", "miss"],
+      "properties": {
+        "perfect": { "type": "integer", "minimum": 0 },
+        "great": { "type": "integer", "minimum": 0 },
+        "good": { "type": "integer", "minimum": 0 },
+        "bad": { "type": "integer", "minimum": 0 },
+        "miss": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
