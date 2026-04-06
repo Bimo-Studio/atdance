@@ -1,0 +1,1 @@
+(function(){"use strict";self.onmessage=t=>{const e=t.data;fetch(e).then(s=>{if(!s.ok)throw new Error(`HTTP ${String(s.status)}`);return s.arrayBuffer()}).then(s=>{self.postMessage(s,[s])}).catch(s=>{const n=s instanceof Error?s.message:String(s);self.postMessage({error:n})})}})();

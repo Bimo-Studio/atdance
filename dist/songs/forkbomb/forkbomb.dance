@@ -1,0 +1,107 @@
+filename forkbomb.ogg
+title Forkbomb 
+subtitle pydance training song
+artist Pajama Crisis
+author P2E and piman
+banner forkbomb-banner.png
+background forkbomb-bg.jpg
+cdtitle pydance.png
+bpm 136.0
+end
+SINGLE
+BEGINNER 0
+R
+D 8
+L 7 Welcome to the pydance beginner tutorial.
+L 6 (instructions will be here!)
+D 6
+L 7 See the platform under your feet?
+D 6
+L 7 When moving arrows cross over the ones at the top....
+D 6
+L 6 ....you hit corresponding arrows on the platform.
+D 8
+L 7 So, get ready to tap the left arrow..
+D 3.75
+L 7 ...Now!
+D 0.25
+h 1000
+L 7 Don't go back to the center; stay on the left arrow.
+D 4
+L 7 Now, note your "judging" in the middle.
+D 4
+L 7 At the end of a song, these are added up.
+D 4
+L 7 Your grade depends on how close to the beat you dance.
+D 6
+L 7 Here comes another arrow.
+D 3
+L 7 Remember to stay on the left arrow,
+D 3
+L 7 then tap the right when it's covering the top arrow..
+D 3.75
+L 6 ..now!
+D 0.25
+o 0001
+L 7 Okay, now a more tricky technique (sort of).
+D 6
+L 7 Let's try hitting the down and up arrow at the same time.
+D 6
+L 7 You will need to jump to hit two arrows at once. Ready?
+D 3.5
+L 7 Jump!
+D 0.5
+o 0110
+L 7 By now you might have a combo.
+D 4
+L 7 A combo is consecutive marvelous/great/perfect steps.
+D 6
+L 7 Now let's try a "march". Here's how:
+D 4
+L 7 You will probably start standing on both left and right,
+D 6
+L 7 and then "waddle" between the two.
+D 4
+q 1000
+q 0001
+q 1000
+q 0001
+q 1000
+q 0001
+L 7 Now you can see why returning to the center....
+D 6
+L 6 ..might be a bad idea.
+D 4
+L 7 Arrows can appear in any order, like these.
+D 4
+L 7 Be prepared to move a free foot to the next arrow.
+D 6
+q 0010
+q 1000
+q 0100
+q 0001
+q 0010
+D 4
+L 7 On a final note, some tips:
+D 6
+L 7 Remember that arrows are hit to the beat.
+D 6
+L 7 Bounce to the beat if it helps.
+D 6
+L 7 Also look at the number of bars in the song selector.
+D 6
+L 7 More bars means a harder song.
+D 4
+L 7 Try a one-bar song first.
+D 4
+L 7 Last but not least, everything is patterns, like these.
+D 6
+L 7 Recognising them is the key.
+D 4
+q 1000
+q 0100
+q 0010
+q 0001
+D 4
+L 7 Thanks for trying pydance! Here comes your grade..
+end
