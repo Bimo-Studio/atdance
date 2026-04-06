@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden synrg.dance (first SINGLE / TRICK) > snapshot: note count and first/last hit times 1`] = `
+{
+  "count": 222,
+  "firstTimeSec": 6.1475,
+  "lastTimeSec": 111.14750000000001,
+}
+`;
