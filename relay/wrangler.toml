@@ -1,3 +1,9 @@
 name = "atdance-relay"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
+
+# Public hostname via a Worker Route (you create the DNS record yourself — see deployment doc).
+# Requires `malldao.xyz` in this Cloudflare account. Remove this block to use only *.workers.dev.
+[[routes]]
+pattern = "relay.malldao.xyz/*"
+zone_name = "malldao.xyz"

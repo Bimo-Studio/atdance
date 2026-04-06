@@ -14,7 +14,7 @@ Browser rhythm game for **dance.malldao.xyz**. See `plan.md` for the full roadma
 | `pnpm install`       | Install dependencies                                                                                                                                    |
 | `pnpm dev`           | Vite dev server — title → **song select** (minimal, SynRG, 6jan, Forkbomb); chart + audio bytes cache in **IndexedDB** (`idb-keyval`) after first fetch |
 | `pnpm build`         | Typecheck + production bundle                                                                                                                           |
-| `pnpm test`          | Vitest (unit tests under `src/**/*.test.ts` and `relay/**/*.test.ts`)                                                                                   |
+| `pnpm test`          | Vitest (unit tests under `src/**/*.test.ts` and `relay/**/*.test.ts`). Layered test **plans**: `docs/test-plans.md`.                                    |
 | `pnpm test:coverage` | Vitest with coverage report; **CI** enforces **≥ 50%** lines/statements (see `vitest.config.ts`).                                                       |
 | `pnpm e2e`           | Playwright smoke against **`vite preview`** (run `pnpm build` first). Installs browsers once with `pnpm e2e:install` (`playwright install chromium`).   |
 | `pnpm lint`          | ESLint                                                                                                                                                  |
@@ -38,15 +38,17 @@ Browser rhythm game for **dance.malldao.xyz**. See `plan.md` for the full roadma
 
 - **Single-player** timing uses the **Web Audio** clock; **calibration** adjusts tap offset.
 - **Sync Lab** proves **NTP-style** offset/RTT over the relay; not real-time versus play (see `plan.md`).
+- **Direction:** move multiplayer/sync transport toward **Holepunch-style P2P** (topics, encrypted streams) **in the browser** — see **`docs/architecture-p2p-holepunch.md`**. The Worker relay remains available during migration.
 
 ## Environment variables
 
 Copy `.env.example` to `.env.local` for local overrides. Important `VITE_` vars:
 
-| Variable                | Purpose                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `VITE_RELAY_WS`         | Relay WebSocket URL (`wss://…`) for production/staging builds (Sync Lab).      |
-| `VITE_ATPROTO_PDS_HOST` | Self-hosted PDS / handle resolver base URL when enabling OAuth + score writes. |
+| Variable                | Purpose                                                                                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_RELAY_WS`         | Relay WebSocket URL (`wss://…`) for production/staging builds (Sync Lab, **Mode A** legacy).                                                    |
+| `VITE_P2P_BOOTSTRAP`    | Comma-separated or JSON array of `wss://` / `ws://` URLs for **hyperswarm-web** proxy/signal (Sync Lab **Mode B**). See `docs/prd-p2p-sync.md`. |
+| `VITE_ATPROTO_PDS_HOST` | Self-hosted PDS / handle resolver base URL when enabling OAuth + score writes.                                                                  |
 
 ## Local relay
 

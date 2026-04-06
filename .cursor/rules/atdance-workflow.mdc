@@ -1,0 +1,34 @@
+---
+description: TDD, tests-first, no partial drops — ATDance default workflow
+alwaysApply: true
+---
+
+# ATDance agent workflow
+
+## Before claiming a task done
+
+- Run **`pnpm lint`**, **`pnpm typecheck`**, **`pnpm test`** from repo root (use **`pnpm test:coverage`** when changing covered modules). Fix failures **in scope** before handoff.
+- Behavior changes need **tests** that fail without the change (Vitest: `src/**/*.test.ts`, `relay/**/*.test.ts`). See **`AGENTS.md`** and **`plan.md`**.
+
+## TDD order
+
+1. Add or adjust a **failing** test (or extend an existing spec) for the **new** behavior.
+2. Implement **minimal** code to pass.
+3. Refactor only if tests stay green.
+
+## No silent partial work
+
+- Do not leave a phase “half migrated” without **`AGENTS.md`-style** visibility: either finish the slice (code + tests + docs touch) or document **blockers** in the PR and leave **legacy path** working.
+- Prefer **small PRs** that each land **complete** with green CI.
+
+## Anti-hallucination
+
+- **Read** files before editing; ground claims in **`plan.md`**, **`docs/prd-*.md`**, **`docs/architecture-*.md`**, or code.
+- **P2P PRD work:** follow **`docs/tasks-p2p-prd.md`** in **order** (P0 → P1 → P2 → P3); do not skip phases or reorder without updating the checklist and PRD.
+- **Testing layers:** see **`docs/test-plans.md`** (unit / functional / integration / BDD per system); **`docs/tasks-p2p-prd-test-matrix.md`** for P2P task-level proof.
+- Do **not** invent package APIs, env vars, or Cloudflare behavior — verify in repo or upstream docs.
+
+## CI
+
+- **`pnpm build`** after changes that affect bundling or types. Match **`.github/workflows/ci.yml`** expectations before merge.
+- **Merge eligibility:** **`docs/merge-gates.md`** + **`.github/pull_request_template.md`** — if CI is green and checklists are satisfied, handoff is complete without chat sign-off.

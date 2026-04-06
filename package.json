@@ -28,6 +28,7 @@
     "@atproto/common": "^0.5.15",
     "@atproto/oauth-client-browser": "^0.3.41",
     "@atproto/syntax": "^0.5.3",
+    "hyperswarm-web": "^2.2.0",
     "idb-keyval": "^6.2.2",
     "phaser": "^3.80.1",
     "webtorrent": "^2.8.5",
@@ -54,7 +55,7 @@
     "typescript-eslint": "^8.19.1",
     "vite": "^6.0.7",
     "vitest": "^3.0.4",
-    "wrangler": "^3.99.0"
+    "wrangler": "^4.80.0"
   },
   "pnpm": {
     "overrides": {
