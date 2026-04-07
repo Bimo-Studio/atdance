@@ -4,7 +4,7 @@ compatibility_date = "2025-01-01"
 
 # Optional: invite-only queue (PRD P5). Set `INVITE_ONLY=1` and list DIDs in production.
 [vars]
-INVITE_ONLY = "0"
+INVITE_ONLY = "1"
 ATPROTO_ALLOWLIST_DIDS = "did:plc:ya2boguixgy4757qqtw7gwch, did:plc:qdsp7mb3o7irmv7whyjexy7g, did:plc:dzvxvsiy3maw4iarpvizsj67, did:plc:7mnpet2pvof2llhpcwattscf"
 
 # Public hostname via a Worker Route (you create the DNS record yourself — see deployment doc).
