@@ -20,7 +20,10 @@ import { BootScene } from '@/scenes/BootScene';
 import { CalibrationScene } from '@/scenes/CalibrationScene';
 import { InfoScene } from '@/scenes/InfoScene';
 import { PlayScene } from '@/scenes/PlayScene';
+import { PvpLobbyScene } from '@/scenes/PvpLobbyScene';
 import { ResultsScene } from '@/scenes/ResultsScene';
+import { SignInScene } from '@/scenes/SignInScene';
+import { SongPrefsScene } from '@/scenes/SongPrefsScene';
 import { SongSelectScene } from '@/scenes/SongSelectScene';
 import { SyncLabScene } from '@/scenes/SyncLabScene';
 import { TitleScene } from '@/scenes/TitleScene';
@@ -42,7 +45,10 @@ void new Phaser.Game({
   },
   scene: [
     BootScene,
+    SignInScene,
     TitleScene,
+    SongPrefsScene,
+    PvpLobbyScene,
     SongSelectScene,
     InfoScene,
     PlayScene,

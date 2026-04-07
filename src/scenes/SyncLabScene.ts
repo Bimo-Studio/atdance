@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { requirePlaySession } from '@/auth/requirePlaySession';
 import { parseViteP2PBootstrap } from '@/p2p/bootstrapUrl';
 import { formatP2PSyncLabUserError } from '@/p2p/p2pSyncLabErrors';
 import { emaAlpha, ntpOffsetMs, ntpRttMs } from '@/sync/ntp';
@@ -35,6 +36,9 @@ export class SyncLabScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (!requirePlaySession(this)) {
+      return;
+    }
     if (syncLabTransportMode() === 'p2p') {
       this.createP2p();
     } else {

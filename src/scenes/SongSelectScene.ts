@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { requirePlaySession } from '@/auth/requirePlaySession';
 import { playDataFromMagnet } from '@/songSelect/torrentPlayData';
 import { digitIndexFromKey, SONG_SELECT_ROWS } from '@/songSelect/songSelectRows';
 import { setE2eStatus } from '@/util/e2eFlags';
@@ -10,6 +11,9 @@ export class SongSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (!requirePlaySession(this)) {
+      return;
+    }
     setE2eStatus('song-select');
     this.add
       .text(this.scale.width / 2, 56, 'Select song', {

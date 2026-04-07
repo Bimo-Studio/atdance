@@ -33,9 +33,14 @@ alwaysApply: true
 - Do not leave a phase “half migrated” without **`AGENTS.md`-style** visibility: either finish the slice (code + tests + docs touch) or document **blockers** in the PR and leave **legacy path** working.
 - Prefer **small PRs** that each land **complete** with green CI.
 
+## Feature delivery process (when user invokes it)
+
+- When the user asks to **use the process** or deliver a **non-trivial feature**, follow **`docs/process-feature-delivery.md`** in order: **research file** (`docs/research/<slug>.md`) → **plan** (`docs/plans/<slug>-plan.md`) with review → **PRD** (`docs/prd-<slug>.md`) → **tasks** (`docs/tasks-<slug>.md`) → **implementation**. **No implementation before the todo file exists.** TDD + BDD + coverage per that doc; **no partial** completion unless phased in PRD/tasks.
+- **Source of truth for that workflow:** `docs/process-feature-delivery.md` (also linked from **`AGENTS.md`**).
+
 ## Anti-hallucination
 
-- **Read** files before editing; ground claims in **`plan.md`**, **`docs/prd-*.md`**, **`docs/architecture-*.md`**, or code.
+- **Read** files before editing; ground claims in **`plan.md`**, **`docs/prd-*.md`**, **`docs/architecture-*.md`**, **`docs/process-feature-delivery.md`**, or code.
 - **P2P PRD work:** follow **`docs/tasks-p2p-prd.md`** in **order** (P0 → P1 → P2 → P3); do not skip phases or reorder without updating the checklist and PRD.
 - **P2P “keep going” (batch, not ping-pong):** Treat **go / continue / keep going / ok next** and **starting on the checklist Current focus** as **one loop iteration** over a **single numbered task** (e.g. **P1.1**): finish **all** its subtasks, **Tests**, and **DoD**, then **`pnpm lint && pnpm typecheck && pnpm test`** (and **`pnpm build`** if needed). Do **not** pause after one tiny edit for another prompt.
 - **Hard stops only:** ambiguous product choice; secrets; destructive actions needing explicit OK; or work that is **only** manual proof — automate the rest, leave a short manual checklist.

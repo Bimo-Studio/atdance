@@ -1,7 +1,13 @@
 import Phaser from 'phaser';
 
 import { getAtprotoOAuthSession } from '@/auth/atprotoSession';
-import { createBrowserOAuthClient } from '@/auth/browserOAuth';
+
+function formatDid(did: string): string {
+  if (did.length <= 36) {
+    return did;
+  }
+  return `${did.slice(0, 20)}…${did.slice(-8)}`;
+}
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -9,8 +15,20 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    const session = getAtprotoOAuthSession();
+    const didLine = session?.sub?.startsWith('did:') ? formatDid(session.sub) : '—';
+
     this.add
-      .text(this.scale.width / 2, this.scale.height / 2 - 40, 'ATDance\ndance.malldao.xyz', {
+      .text(this.scale.width / 2, 56, `Signed in\n${didLine}`, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#778899',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(this.scale.width / 2, this.scale.height / 2 - 20, 'ATDance\ndance.malldao.xyz', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '28px',
         color: '#e8e8f0',
@@ -20,11 +38,11 @@ export class TitleScene extends Phaser.Scene {
     this.add
       .text(
         this.scale.width / 2,
-        this.scale.height / 2 + 48,
-        'SPACE or click — song select  •  I — build info  •  C — calibration  •  T — clock sync lab',
+        this.scale.height / 2 + 56,
+        'SPACE or click — song select  •  K — song priority  •  P — PvP lobby  •  I — build info  •  C — calibration  •  T — sync lab',
         {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '18px',
+          fontSize: '16px',
           color: '#8899aa',
           align: 'center',
         },
@@ -40,6 +58,14 @@ export class TitleScene extends Phaser.Scene {
         this.scene.start('InfoScene', { backSceneKey: 'TitleScene' });
         return;
       }
+      if (ev.code === 'KeyK') {
+        this.scene.start('SongPrefsScene');
+        return;
+      }
+      if (ev.code === 'KeyP') {
+        this.scene.start('PvpLobbyScene');
+        return;
+      }
       if (ev.code === 'KeyC') {
         this.scene.start('CalibrationScene');
       }
@@ -47,54 +73,5 @@ export class TitleScene extends Phaser.Scene {
         this.scene.start('SyncLabScene');
       }
     });
-
-    const parent = this.game.canvas.parentElement;
-    if (parent && import.meta.env.VITE_ATPROTO_PDS_HOST) {
-      const wrap = document.createElement('div');
-      wrap.style.cssText =
-        'position:absolute;left:50%;transform:translateX(-50%);bottom:8px;width:min(520px,94vw);padding:8px 10px;background:rgba(12,12,20,0.92);border:1px solid #334455;border-radius:8px;font-family:system-ui,sans-serif;font-size:12px;color:#8899aa;';
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
-      const session = getAtprotoOAuthSession();
-      const status = document.createElement('span');
-      status.style.flex = '1';
-      status.textContent = session ? `ATProto session: ${session.sub}` : 'ATProto: not signed in';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.placeholder = 'handle.example.com';
-      input.style.cssText =
-        'min-width:140px;flex:1;padding:6px;background:#1a1a24;border:1px solid #445566;color:#e8e8f0;border-radius:4px;';
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = 'Sign in (PDS OAuth)';
-      btn.style.cssText =
-        'padding:6px 10px;cursor:pointer;border-radius:4px;border:1px solid #556677;background:#2a2a36;color:#e8e8f0;';
-      btn.addEventListener('click', () => {
-        const h = input.value.trim();
-        if (!h) {
-          status.textContent = 'Enter your handle.';
-          return;
-        }
-        const client = createBrowserOAuthClient();
-        if (!client) {
-          status.textContent = 'OAuth client unavailable.';
-          return;
-        }
-        void client.signInRedirect(h);
-      });
-      row.appendChild(input);
-      row.appendChild(btn);
-      wrap.appendChild(status);
-      wrap.appendChild(row);
-      const hint = document.createElement('div');
-      hint.textContent =
-        'Refresh tokens stay in IndexedDB (not localStorage). Requires hosted client metadata in production.';
-      hint.style.cssText = 'margin-top:6px;font-size:11px;opacity:0.85;';
-      wrap.appendChild(hint);
-      parent.appendChild(wrap);
-      this.events.once('shutdown', () => {
-        wrap.remove();
-      });
-    }
   }
 }

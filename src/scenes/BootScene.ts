@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
-import { initAtprotoSessionOnBoot } from '@/auth/atprotoSession';
+import { canPlay } from '@/auth/authGate';
+import { getAtprotoOAuthSession, initAtprotoSessionOnBoot } from '@/auth/atprotoSession';
 import { isE2eMode, syncLabE2eFromSearch } from '@/util/e2eFlags';
 
 export class BootScene extends Phaser.Scene {
@@ -21,6 +22,11 @@ export class BootScene extends Phaser.Scene {
     }
 
     void initAtprotoSessionOnBoot().finally(() => {
+      const session = getAtprotoOAuthSession();
+      if (!canPlay(session)) {
+        this.scene.start('SignInScene');
+        return;
+      }
       this.scene.start('TitleScene');
     });
   }

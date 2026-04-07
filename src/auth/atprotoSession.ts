@@ -1,6 +1,6 @@
 import type { OAuthSession } from '@atproto/oauth-client-browser';
 
-import { createBrowserOAuthClient } from '@/auth/browserOAuth';
+import { createAtprotoOAuthClient } from '@/auth/streamplaceOAuth';
 
 let cachedSession: OAuthSession | null = null;
 
@@ -13,7 +13,7 @@ export function getAtprotoOAuthSession(): OAuthSession | null {
  * Call once on boot; restores session after OAuth redirect (IndexedDB via oauth-client-browser).
  */
 export async function initAtprotoSessionOnBoot(): Promise<void> {
-  const client = createBrowserOAuthClient();
+  const client = createAtprotoOAuthClient();
   if (!client) {
     cachedSession = null;
     return;

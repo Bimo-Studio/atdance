@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { requirePlaySession } from '@/auth/requirePlaySession';
 import { median } from '@/calibration/median';
 import { setCalibrationOffsetSec } from '@/calibration/storage';
 
@@ -33,6 +34,9 @@ export class CalibrationScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (!requirePlaySession(this)) {
+      return;
+    }
     this.add
       .text(this.scale.width / 2, 80, 'Calibration', {
         fontFamily: 'system-ui, sans-serif',

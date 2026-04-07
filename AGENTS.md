@@ -2,6 +2,14 @@
 
 This file is for **humans and AI coding agents** (Cursor, etc.). It does **not** replace CI or review — it aligns intent so work stays **test-backed**, **scoped**, and **traceable**.
 
+## Feature / initiative delivery (mandatory process)
+
+When the user asks to **use the process**, **follow the delivery process**, or work on a **non-trivial feature or subsystem**, follow **`docs/process-feature-delivery.md`** end-to-end:
+
+**Research file** → **Plan file** (with clarifying questions & unknown-unknowns) → **stakeholder review** → **revision** → **PRD** → **`docs/tasks-*.md` todo list** (context-window-sized checkboxes, TDD + BDD + coverage) → **only then implementation**. Partial delivery and checking boxes without passing tests are **forbidden** unless explicitly phased in the PRD and tasks.
+
+This is the **canonical** workflow; it does not replace **`plan.md`** or product PRDs — it governs **how** they are produced and executed.
+
 ## What we cannot “guarantee”
 
 Tools and prompts **reduce** drift; they **do not** mathematically guarantee correct code. **Enforcement** comes from: **CI** (`.github/workflows/ci.yml`), **review**, and **you** rejecting incomplete work. Agents should still follow everything below.
@@ -14,12 +22,14 @@ Tools and prompts **reduce** drift; they **do not** mathematically guarantee cor
 
 ## Source of truth (anti-hallucination)
 
-1. **`plan.md`** — phased scope, DoD, what is in/out of MVP.
-2. **`docs/test-plans.md`** — layered **unit / functional / integration / BDD** expectations per **system**; extend it when new subsystems ship.
-3. **`docs/prd-*.md` / `docs/architecture-*.md`** — product and architecture decisions; **do not invent** APIs or infra not described without updating the doc in the same change. For **P2P sync (PRD)**, also follow **`docs/tasks-p2p-prd.md`** — **ordered** checkboxes; do **not** skip phases. Required **proof per task**: **`docs/tasks-p2p-prd-test-matrix.md`**.
-4. **Existing code** — **read** relevant files before editing; **cite paths** in PRs and agent summaries.
-5. **`package.json` scripts** — run **`pnpm lint`**, **`pnpm typecheck`**, **`pnpm test`** (or **`pnpm test:coverage`** when touching covered code) from repo root unless the task is docs-only.
-6. **`docs/merge-gates.md`** — objective **merge eligibility** (CI + spec + PR checklist); use instead of informal approval in chat.
+1. **`docs/process-feature-delivery.md`** — **how** multi-session features are researched, planned, PRD’d, task-broken down, and implemented (TDD/BDD/coverage; no code before todos).
+2. **`plan.md`** — phased scope, DoD, what is in/out of MVP.
+3. **`docs/test-plans.md`** — layered **unit / functional / integration / BDD** expectations per **system**; extend it when new subsystems ship.
+4. **`docs/prd-*.md` / `docs/architecture-*.md`** — product and architecture decisions; **do not invent** APIs or infra not described without updating the doc in the same change. For **P2P sync (PRD)**, also follow **`docs/tasks-p2p-prd.md`** — **ordered** checkboxes; do **not** skip phases. Required **proof per task**: **`docs/tasks-p2p-prd-test-matrix.md`**.
+5. **`docs/research/*.md`**, **`docs/plans/*-plan.md`**, **`docs/tasks-*.md`** — per **`docs/process-feature-delivery.md`** for initiatives that use the full process.
+6. **Existing code** — **read** relevant files before editing; **cite paths** in PRs and agent summaries.
+7. **`package.json` scripts** — run **`pnpm lint`**, **`pnpm typecheck`**, **`pnpm test`** (or **`pnpm test:coverage`** when touching covered code) from repo root unless the task is docs-only.
+8. **`docs/merge-gates.md`** — objective **merge eligibility** (CI + spec + PR checklist); use instead of informal approval in chat.
 
 ---
 
@@ -60,4 +70,4 @@ Tools and prompts **reduce** drift; they **do not** mathematically guarantee cor
 
 ---
 
-_Last updated: 2026-04-06_
+_Last updated: 2026-04-06 — added `docs/process-feature-delivery.md` to source of truth._

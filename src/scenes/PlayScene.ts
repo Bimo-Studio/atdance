@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { requirePlaySession } from '@/auth/requirePlaySession';
 import { AudioClock } from '@/audio/AudioClock';
 import { decodeAudioArrayBuffer } from '@/audio/decodeAudio';
 import { decodeAudioFromUrlCached, fetchChartTextCached } from '@/cache/fetchCached';
@@ -114,6 +115,9 @@ export class PlayScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (!requirePlaySession(this)) {
+      return;
+    }
     this.score = 0;
     this.combo = 0;
     this.lastGrade = '';

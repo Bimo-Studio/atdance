@@ -2,6 +2,8 @@
 
 Browser rhythm game for **dance.malldao.xyz**. See `plan.md` for the full roadmap.
 
+**Feature / initiative delivery:** multi-session work follows **`docs/process-feature-delivery.md`** (research → plan → PRD → checkbox tasks → implementation with TDD/BDD). Also referenced from **`AGENTS.md`** and **`.cursor/rules/atdance-workflow.mdc`**.
+
 ## Requirements
 
 - Node.js 20+
