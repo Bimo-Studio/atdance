@@ -8,6 +8,7 @@ const joinQueue = z
   .object({
     type: z.literal('joinQueue'),
     clientId: z.string().min(1),
+    playerDid: z.string().min(1).optional(),
   })
   .strict();
 

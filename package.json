@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:invite": "tsc --noEmit && VITE_INVITE_ONLY=1 VITE_ATPROTO_ALLOWLIST_DIDS=did:web:e2e.allow vite build --outDir dist-invite",
     "preview": "vite preview",
     "lint": "eslint . && tsx src/ci/checkPnpmWorkflow.ts",
     "lint:fix": "eslint . --fix",
@@ -17,6 +18,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
+    "e2e:invite": "pnpm build:invite && playwright test --config playwright.invite.config.ts",
+    "e2e:all": "pnpm e2e && pnpm e2e:invite",
     "e2e:install": "playwright install chromium",
     "relay:dev": "wrangler dev --config relay/wrangler.toml",
     "relay:deploy": "wrangler deploy --config relay/wrangler.toml",

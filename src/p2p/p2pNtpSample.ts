@@ -85,6 +85,22 @@ export async function runOneNtpExchangeInitiator(
   });
 }
 
+/** Collect RTT-only samples for `evaluateMatchQuality` (P3 probe path). */
+export async function collectRttMsBurst(
+  socket: EchoDuplex,
+  sampleCount: number,
+  pingTimeoutMs = 5000,
+): Promise<number[]> {
+  const out: number[] = [];
+  for (let i = 0; i < sampleCount; i += 1) {
+    const { rttMs } = await runOneNtpExchangeInitiator(socket, {
+      timeoutMs: pingTimeoutMs,
+    });
+    out.push(rttMs);
+  }
+  return out;
+}
+
 export async function runNtpSampleBurstInitiator(
   socket: EchoDuplex,
   opts: {

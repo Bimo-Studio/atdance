@@ -13,4 +13,6 @@ interface ImportMetaEnv {
   readonly VITE_P2P_BOOTSTRAP?: string;
   /** `p2p` to default Sync Lab to P2P spike (also use `?sync=p2p`). */
   readonly VITE_SYNC_LAB_MODE?: string;
+  /** When `1`, use P2P duplex for RTT probe when a socket is wired (P3.5b). */
+  readonly VITE_PVP_P2P_PROBE?: string;
 }

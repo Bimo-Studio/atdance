@@ -9,6 +9,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist',
+      'dist-invite',
       'node_modules',
       'relay/**',
       'coverage',

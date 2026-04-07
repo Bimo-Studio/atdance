@@ -8,6 +8,10 @@
   <body>
     <!-- Set by app when URL has ?e2e=1 (Playwright smoke — plan Phase 5.1). -->
     <div id="e2e-status" hidden data-status=""></div>
+    <div id="e2e-priority-hud" hidden></div>
+    <div id="e2e-magnet-hud" hidden></div>
+    <div id="e2e-pvp-lobby" hidden data-phase=""></div>
+    <div id="e2e-pvp-probe" hidden data-result="" data-requeue-count="0"></div>
     <div id="game-root"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

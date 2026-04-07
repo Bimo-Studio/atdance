@@ -8,6 +8,9 @@ export interface RelayRoom {
   readonly roomId: string;
   readonly a: string;
   readonly b: string;
+  /** From last `joinQueue.playerDid` for §9 `match_probe` logs (optional). */
+  readonly didA?: string;
+  readonly didB?: string;
 }
 
 export interface RelayState {
@@ -15,6 +18,8 @@ export interface RelayState {
   readonly rooms: ReadonlyMap<string, RelayRoom>;
   readonly clientRoom: ReadonlyMap<string, string>;
   readonly nextRoomSeq: number;
+  /** Queue clients only — cleared when paired or removed from queue. */
+  readonly clientPlayerDid: ReadonlyMap<string, string>;
 }
 
 export interface RelayEffect {
@@ -22,11 +27,18 @@ export interface RelayEffect {
   readonly message: SyncMessageV1;
 }
 
+/** When `inviteOnly`, `joinQueue` must carry an allowed `playerDid` (PRD P5). */
+export interface RelayInviteContext {
+  readonly inviteOnly: boolean;
+  readonly allowedDids: ReadonlySet<string>;
+}
+
 type MutableState = {
   queue: string[];
   rooms: Map<string, RelayRoom>;
   clientRoom: Map<string, string>;
   nextRoomSeq: number;
+  clientPlayerDid: Map<string, string>;
 };
 
 export function createRelayState(): RelayState {
@@ -35,6 +47,7 @@ export function createRelayState(): RelayState {
     rooms: new Map(),
     clientRoom: new Map(),
     nextRoomSeq: 0,
+    clientPlayerDid: new Map(),
   };
 }
 
@@ -44,6 +57,7 @@ function toMutable(s: RelayState): MutableState {
     rooms: new Map(s.rooms),
     clientRoom: new Map(s.clientRoom),
     nextRoomSeq: s.nextRoomSeq,
+    clientPlayerDid: new Map(s.clientPlayerDid),
   };
 }
 
@@ -53,6 +67,7 @@ function freezeState(m: MutableState): RelayState {
     rooms: new Map(m.rooms),
     clientRoom: new Map(m.clientRoom),
     nextRoomSeq: m.nextRoomSeq,
+    clientPlayerDid: new Map(m.clientPlayerDid),
   };
 }
 
@@ -60,6 +75,7 @@ export function applyRelayMessage(
   state: RelayState,
   senderClientId: string,
   msg: SyncMessageV1,
+  invite?: RelayInviteContext,
 ): { state: RelayState; effects: RelayEffect[] } {
   const m = toMutable(state);
 
@@ -67,10 +83,36 @@ export function applyRelayMessage(
     if (msg.clientId !== senderClientId) {
       return { state, effects: [] };
     }
+    if (invite?.inviteOnly) {
+      const did = msg.playerDid?.trim();
+      if (did === undefined || did === '' || !did.startsWith('did:')) {
+        return {
+          state,
+          effects: [
+            {
+              toClientId: senderClientId,
+              message: { type: 'error', code: 'invite_only' },
+            },
+          ],
+        };
+      }
+      if (!invite.allowedDids.has(did)) {
+        return {
+          state,
+          effects: [
+            { toClientId: senderClientId, message: { type: 'error', code: 'invite_only' } },
+          ],
+        };
+      }
+    }
     if (m.clientRoom.has(senderClientId) || m.queue.includes(senderClientId)) {
       return { state, effects: [] };
     }
     m.queue.push(senderClientId);
+    const trimmedDid = msg.playerDid?.trim();
+    if (trimmedDid !== undefined && trimmedDid !== '') {
+      m.clientPlayerDid.set(senderClientId, trimmedDid);
+    }
     if (m.queue.length < 2) {
       return { state: freezeState(m), effects: [] };
     }
@@ -78,7 +120,17 @@ export function applyRelayMessage(
     const b = m.queue.shift()!;
     const roomId = `room-${m.nextRoomSeq}`;
     m.nextRoomSeq += 1;
-    m.rooms.set(roomId, { roomId, a, b });
+    const didA = m.clientPlayerDid.get(a);
+    const didB = m.clientPlayerDid.get(b);
+    m.clientPlayerDid.delete(a);
+    m.clientPlayerDid.delete(b);
+    m.rooms.set(roomId, {
+      roomId,
+      a,
+      b,
+      didA,
+      didB,
+    });
     m.clientRoom.set(a, roomId);
     m.clientRoom.set(b, roomId);
     const effects: RelayEffect[] = [
@@ -126,6 +178,7 @@ function removeClient(
   const qIdx = m.queue.indexOf(clientId);
   if (qIdx >= 0) {
     m.queue.splice(qIdx, 1);
+    m.clientPlayerDid.delete(clientId);
     return { state: freezeState(m), effects: [] };
   }
 

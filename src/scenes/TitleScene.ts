@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { getAtprotoOAuthSession } from '@/auth/atprotoSession';
+import { isE2eMode, setE2eStatus } from '@/util/e2eFlags';
 
 function formatDid(did: string): string {
   if (did.length <= 36) {
@@ -15,6 +16,9 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (isE2eMode()) {
+      setE2eStatus('title');
+    }
     const session = getAtprotoOAuthSession();
     const didLine = session?.sub?.startsWith('did:') ? formatDid(session.sub) : '—';
 
@@ -39,7 +43,7 @@ export class TitleScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height / 2 + 56,
-        'SPACE or click — song select  •  K — song priority  •  P — PvP lobby  •  I — build info  •  C — calibration  •  T — sync lab',
+        'SPACE or click — song select  •  K — song priority  •  M — magnet library  •  P — PvP lobby  •  I — build info  •  C — calibration  •  T — sync lab',
         {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '16px',
@@ -60,6 +64,10 @@ export class TitleScene extends Phaser.Scene {
       }
       if (ev.code === 'KeyK') {
         this.scene.start('SongPrefsScene');
+        return;
+      }
+      if (ev.code === 'KeyM') {
+        this.scene.start('MagnetLibraryScene');
         return;
       }
       if (ev.code === 'KeyP') {

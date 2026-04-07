@@ -163,18 +163,36 @@ This file is the **execution runway** for LLM sessions that reset. **Checkbox gr
    - **TDD:** Vitest for pure logic; failing test before or with minimal implementation.
    - **BDD:** Playwright (or project-agreed E2E) for user-visible flows where applicable.
 6. **Appendix** — “landed vs open” snapshot optional but recommended.
+7. **Release-please commit message (final row)** — see §4.5. **Must** be the **last** checkbox in the file; see §4.3.
 
 ### 4.3 Hard rules for todos
 
-| Rule                                    | Detail                                                                                                                                                                |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No implementation until todos exist** | Do not open implementation PRs until `docs/tasks-<slug>.md` is written end-to-end for the approved PRD scope.                                                         |
-| **No partial completion**               | “Stub” or “later” in production paths is **not** done unless PRD explicitly calls a **phased** release **and** the same is reflected in todos with a **later** phase. |
-| **Checkbox = tests green**              | Do not check a box until **`pnpm test`** passes for that slice and **`pnpm lint`** is clean.                                                                          |
-| **Coverage**                            | **`pnpm test:coverage`** must meet repo thresholds before the **milestone** or **project** is marked complete.                                                        |
-| **Multiple passes**                     | It is OK to add rows in **second/third passes** when detail emerges; update the PRD when new scope appears.                                                           |
+| Rule                                    | Detail                                                                                                                                                                                                                                                   |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No implementation until todos exist** | Do not open implementation PRs until `docs/tasks-<slug>.md` is written end-to-end for the approved PRD scope.                                                                                                                                            |
+| **No partial completion**               | “Stub” or “later” in production paths is **not** done unless PRD explicitly calls a **phased** release **and** the same is reflected in todos with a **later** phase.                                                                                    |
+| **Checkbox = tests green**              | Do not check a box until **`pnpm test`** passes for that slice and **`pnpm lint`** is clean.                                                                                                                                                             |
+| **Coverage**                            | **`pnpm test:coverage`** must meet repo thresholds before the **milestone** or **project** is marked complete.                                                                                                                                           |
+| **Multiple passes**                     | It is OK to add rows in **second/third passes** when detail emerges; update the PRD when new scope appears.                                                                                                                                              |
+| **Release-please message last**         | The **final** checkbox in `docs/tasks-<slug>.md` is always **§4.5 `RP.1`**. **Do not** check `RP.1` until **every other** checkbox in that file is **`[x]`** (including milestone gates and final acceptance). **Do not** add any task row below `RP.1`. |
 
-### 4.4 Handoff template (copy into every `docs/tasks-*.md`)
+### 4.5 Final task: release-please commit message (mandatory)
+
+Every `docs/tasks-<slug>.md` **must** end with **exactly one** closing row after all implementation, acceptance, and documentation tasks:
+
+| ID       | Task                                                                                                                                                                                                                                                                                                                                                                | Notes                                                                                                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **RP.1** | **Draft the [Conventional Commits](https://www.conventionalcommits.org/) title and body** suitable for **release-please** (and this repo’s commit / squash conventions). Summarize the shipped change set: **what** changed, **why**, and **scope** (`feat`, `fix`, `docs`, etc.). Paste into the **merge commit** or **PR description** as your workflow requires. | Checked only when the initiative is otherwise complete: **all** prior boxes in this file are `[x]`, and **`pnpm lint && pnpm test && pnpm test:coverage`** pass on the merge target. |
+
+**Placement:** Put **`RP.1`** **after** “Final acceptance,” **definition-of-done** checklists, and **milestone** rows for the initiative — it is the **last task checkbox** in the file. An optional **Appendix** or “How to use” section with **no** `[ ]` rows may follow **`RP.1`** at the very end.
+
+**Rules**
+
+1. **`RP.1` is always the last task checkbox** — no `[ ]` rows below **`RP.1`**. If you need more work, **uncheck** the relevant earlier row, add new rows **above** `RP.1`, complete them, then return to `RP.1`.
+2. **No skipping** — drafting the message in a scratch buffer early is fine, but the **`[x]`** on `RP.1` is only set when the rest of the list is done.
+3. **If the initiative is abandoned or split** — remove or rewrite `RP.1` in the same edit that narrows scope; do not leave a stale message task.
+
+### 4.6 Handoff template (copy into every `docs/tasks-*.md`)
 
 ```markdown
 ## Handoff block (update when you stop)
@@ -199,6 +217,7 @@ Only after §4 is satisfied:
 3. Run **global gates** at appropriate intervals (at least before PR merge).
 4. **Check the box** only when tests for that slice pass.
 5. Update **Handoff** in the tasks file when stopping work.
+6. When **only `RP.1`** (§4.5) remains: confirm **all** gates green one last time, then draft the **release-please** commit message and check **`RP.1`** — no other rows should follow it.
 
 ---
 
@@ -207,7 +226,7 @@ Only after §4 is satisfied:
 The initiative is **complete** only when:
 
 - [ ] `docs/prd-<slug>.md` reflects final shipped behavior (or points to ADRs for intentional diffs).
-- [ ] `docs/tasks-<slug>.md` has **all** checkboxes **checked**.
+- [ ] `docs/tasks-<slug>.md` has **all** checkboxes **checked**, including **`RP.1`** (§4.5) **last** — the release-please commit message is written only after everything else is done.
 - [ ] `pnpm lint && pnpm test && pnpm test:coverage` pass on the merge target.
 - [ ] `AGENTS.md` / `docs/test-plans.md` updated if new systems need ongoing proof.
 
@@ -223,6 +242,7 @@ Every `docs/tasks-<slug>.md` **must** include explicit rows or gate sections for
 2. **BDD** — Playwright (or repo-standard E2E) for user journeys where applicable.
 3. **`pnpm test`** — 100% pass before merge.
 4. **`pnpm test:coverage`** — meets **`vitest.config.ts`** thresholds (this repo commonly enforces **≥ 50%** lines and statements on included globs).
+5. **`RP.1`** — final row per §4.5 (release-please commit message), checked **after** items 1–4 are satisfied for the initiative.
 
 Phaser scenes may stay thin; **extract logic** to testable modules so coverage stays meaningful (`AGENTS.md` aligns with this).
 
@@ -252,6 +272,6 @@ Use a **consistent `<slug>`** across all four when they describe the same initia
 
 ## 10. Changelog of this process
 
-| Date       | Change                                                                                                                                                |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-04-06 | Initial version: research → plan → review → PRD → tasks → implementation; TDD/BDD/coverage mandatory; no implementation before todos; handoff blocks. |
+| Date       | Change                                                                                                                                                                                                                |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-06 | Initial version; §4.5–4.6: mandatory final task **`RP.1`** (release-please / Conventional Commits message, last checkbox); research → plan → review → PRD → tasks → implementation; TDD/BDD/coverage; handoff blocks. |

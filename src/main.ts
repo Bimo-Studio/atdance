@@ -19,6 +19,7 @@ if (!g.process) {
 import { BootScene } from '@/scenes/BootScene';
 import { CalibrationScene } from '@/scenes/CalibrationScene';
 import { InfoScene } from '@/scenes/InfoScene';
+import { MagnetLibraryScene } from '@/scenes/MagnetLibraryScene';
 import { PlayScene } from '@/scenes/PlayScene';
 import { PvpLobbyScene } from '@/scenes/PvpLobbyScene';
 import { ResultsScene } from '@/scenes/ResultsScene';
@@ -27,6 +28,10 @@ import { SongPrefsScene } from '@/scenes/SongPrefsScene';
 import { SongSelectScene } from '@/scenes/SongSelectScene';
 import { SyncLabScene } from '@/scenes/SyncLabScene';
 import { TitleScene } from '@/scenes/TitleScene';
+
+if (import.meta.env.VITE_INVITE_ONLY === '1') {
+  document.documentElement.setAttribute('data-invite-only', '1');
+}
 
 const parent = document.getElementById('game-root');
 if (!parent) {
@@ -48,6 +53,7 @@ void new Phaser.Game({
     SignInScene,
     TitleScene,
     SongPrefsScene,
+    MagnetLibraryScene,
     PvpLobbyScene,
     SongSelectScene,
     InfoScene,

@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-invite
 coverage
 .DS_Store
 .env

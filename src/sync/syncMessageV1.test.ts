@@ -8,6 +8,15 @@ describe('parseSyncMessageV1 (plan Phase 4.1)', () => {
     expect(parseSyncMessageV1(j)).toEqual({ type: 'joinQueue', clientId: 'c1' });
   });
 
+  it('parses joinQueue with playerDid', () => {
+    const j = '{"type":"joinQueue","clientId":"c1","playerDid":"did:plc:abc"}';
+    expect(parseSyncMessageV1(j)).toEqual({
+      type: 'joinQueue',
+      clientId: 'c1',
+      playerDid: 'did:plc:abc',
+    });
+  });
+
   it('parses paired', () => {
     const j = '{"type":"paired","roomId":"r1","peerClientId":"c2"}';
     expect(parseSyncMessageV1(j)).toEqual({

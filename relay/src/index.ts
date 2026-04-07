@@ -1,10 +1,14 @@
 /**
  * Cloudflare Worker: WebSocket relay for queue pairing + NTP-style ping/pong (plan Phase 4.2).
  * Deploy: pnpm relay:deploy
+ *
+ * **Never** write `CF-Connecting-IP` (or any IP) into structured JSON log lines (PRD §9).
  */
 import { parseSyncMessageV1 } from '../../src/sync/syncMessageV1';
+import { parseRelayInviteEnv } from './inviteAllowlist';
 import { parseSyncPingPayload } from './protocol';
 import { allowJoinForIp, createJoinRateState, type JoinRateState } from './rateLimit';
+import { formatRelayLogLine } from './relayLogPayload';
 import {
   applyRelayMessage,
   createRelayState,
@@ -14,6 +18,11 @@ import {
 
 const JOIN_PER_MINUTE = 20;
 const JOIN_WINDOW_MS = 60_000;
+
+export interface RelayWorkerEnv {
+  readonly INVITE_ONLY?: string;
+  readonly ATPROTO_ALLOWLIST_DIDS?: string;
+}
 
 let relayState: RelayState = createRelayState();
 let joinRateState: JoinRateState = createJoinRateState();
@@ -28,14 +37,20 @@ function sendToClient(clientId: string, message: unknown): void {
   }
 }
 
+function newTraceId(): string {
+  return crypto.randomUUID();
+}
+
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: RelayWorkerEnv): Promise<Response> {
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('ATDance relay — WebSocket (queue + clock sync)', {
         status: 200,
         headers: { 'content-type': 'text/plain; charset=utf-8' },
       });
     }
+
+    const invite = parseRelayInviteEnv(env);
 
     const pair = new WebSocketPair();
     const client = pair[0];
@@ -76,7 +91,18 @@ export default {
             return;
           }
           joinRateState = rl.state;
-          const r = applyRelayMessage(relayState, parsed.clientId, parsed);
+
+          console.log(
+            formatRelayLogLine({
+              evt: 'relay_queue_join',
+              traceId: newTraceId(),
+              clientId: parsed.clientId,
+              playerDid: parsed.playerDid,
+              phase: 'queue',
+            }),
+          );
+
+          const r = applyRelayMessage(relayState, parsed.clientId, parsed, invite);
           relayState = r.state;
           if (!clientSockets.has(parsed.clientId)) {
             clientSockets.set(parsed.clientId, server);
@@ -84,6 +110,32 @@ export default {
           }
           for (const e of r.effects) {
             sendToClient(e.toClientId, e.message);
+            if (e.message.type === 'paired') {
+              const room = relayState.rooms.get(e.message.roomId);
+              console.log(
+                formatRelayLogLine({
+                  evt: 'relay_paired',
+                  traceId: newTraceId(),
+                  roomId: e.message.roomId,
+                  peerClientId: e.message.peerClientId,
+                  phase: 'queue',
+                }),
+              );
+              console.log(
+                formatRelayLogLine({
+                  evt: 'match_probe',
+                  traceId: newTraceId(),
+                  phase: 'probe',
+                  matchId: e.message.roomId,
+                  localDid: room?.didA,
+                  remoteDid: room?.didB,
+                  rttMeanMs: 0,
+                  rttP95Ms: 0,
+                  jitterStdMs: 0,
+                  decision: 'accept',
+                }),
+              );
+            }
           }
           return;
         }
@@ -92,7 +144,7 @@ export default {
         if (senderId === undefined) {
           return;
         }
-        const r = applyRelayMessage(relayState, senderId, parsed);
+        const r = applyRelayMessage(relayState, senderId, parsed, invite);
         relayState = r.state;
         for (const e of r.effects) {
           sendToClient(e.toClientId, e.message);

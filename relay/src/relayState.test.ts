@@ -98,4 +98,67 @@ describe('relay state machine (plan Phase 4.2)', () => {
     expect(sendTo(r2.effects, 'y')[0]?.type).toBe('leave');
     expect((sendTo(r2.effects, 'y')[0] as { roomId?: string }).roomId).toBe(roomId);
   });
+
+  it('invite-only: rejects joinQueue without playerDid', () => {
+    const s = createRelayState();
+    const invite = { inviteOnly: true, allowedDids: new Set(['did:plc:x']) };
+    const r = applyRelayMessage(s, 'a', { type: 'joinQueue', clientId: 'a' }, invite);
+    expect(r.state.queue).toEqual([]);
+    expect(sendTo(r.effects, 'a')[0]).toEqual({ type: 'error', code: 'invite_only' });
+  });
+
+  it('invite-only: rejects joinQueue when DID not allowlisted', () => {
+    const s = createRelayState();
+    const invite = { inviteOnly: true, allowedDids: new Set(['did:plc:x']) };
+    const r = applyRelayMessage(
+      s,
+      'a',
+      { type: 'joinQueue', clientId: 'a', playerDid: 'did:plc:y' },
+      invite,
+    );
+    expect(r.state.queue).toEqual([]);
+    expect(sendTo(r.effects, 'a')[0]).toEqual({ type: 'error', code: 'invite_only' });
+  });
+
+  it('invite-only: pairs when DIDs are allowlisted', () => {
+    let s = createRelayState();
+    const invite = { inviteOnly: true, allowedDids: new Set(['did:plc:a', 'did:plc:b']) };
+    let r = applyRelayMessage(
+      s,
+      'a',
+      { type: 'joinQueue', clientId: 'a', playerDid: 'did:plc:a' },
+      invite,
+    );
+    s = r.state;
+    expect(r.effects).toEqual([]);
+    r = applyRelayMessage(
+      s,
+      'b',
+      { type: 'joinQueue', clientId: 'b', playerDid: 'did:plc:b' },
+      invite,
+    );
+    expect(r.state.rooms.size).toBe(1);
+    expect(sendTo(r.effects, 'a').length).toBeGreaterThan(0);
+    const room = [...r.state.rooms.values()][0]!;
+    expect(room.didA).toBe('did:plc:a');
+    expect(room.didB).toBe('did:plc:b');
+  });
+
+  it('records optional DIDs on room when joinQueue sends playerDid', () => {
+    let s = createRelayState();
+    let r = applyRelayMessage(s, 'a', {
+      type: 'joinQueue',
+      clientId: 'a',
+      playerDid: 'did:plc:alice',
+    });
+    s = r.state;
+    r = applyRelayMessage(s, 'b', {
+      type: 'joinQueue',
+      clientId: 'b',
+      playerDid: 'did:plc:bob',
+    });
+    const room = [...r.state.rooms.values()][0]!;
+    expect(room.didA).toBe('did:plc:alice');
+    expect(room.didB).toBe('did:plc:bob');
+  });
 });
