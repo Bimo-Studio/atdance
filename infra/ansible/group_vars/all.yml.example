@@ -1,0 +1,18 @@
+---
+# Copy to group_vars/all.yml (gitignored) or pass as -e extra vars.
+
+deploy_username: deploy
+
+# Same public key Terraform uploaded to DigitalOcean — Ansible installs it for {{ deploy_username }}.
+deploy_ssh_public_key_path: "~/.ssh/id_ed25519.pub"
+
+# TCP ports allowed through UFW on the host (match Terraform firewall + your services).
+ufw_allowed_tcp_ports:
+  - "22"
+  - "80"
+  - "443"
+
+# fail2ban
+fail2ban_bantime: "1h"
+fail2ban_findtime: "10m"
+fail2ban_maxretry: 4

@@ -8,6 +8,8 @@ Tools and prompts **reduce** drift; they **do not** mathematically guarantee cor
 
 **Merge without chat approval:** when **CI is green** and **`docs/merge-gates.md`** checklist + PR template are satisfied, treat the change as **merge-eligible** — no need for “looks good” in conversation.
 
+**Minimize check-in prompts:** agents follow **`.cursor/rules/atdance-workflow.mdc`** — run **`pnpm` / tests** without asking, batch work into one handoff, do not treat casual replies (“neat”, “ok”) as a stop signal unless the user explicitly holds scope, and do **not** deflect into “change your Cursor settings” — **implement in the repo**.
+
 ---
 
 ## Source of truth (anti-hallucination)

@@ -1,0 +1,145 @@
+---
+# Harden a fresh Ubuntu 22.04 droplet: deploy user, SSH hardening, UFW, fail2ban,
+# unattended security upgrades. Run as root over SSH once; after this, use
+# `ansible_user={{ deploy_username }}` with sudo for app deploys.
+#
+# Example:
+#   cd infra/ansible
+#   ansible-playbook -i "YOUR_DROPLET_IP," playbook.yml -e "deploy_ssh_public_key_path=$HOME/.ssh/id_ed25519.pub"
+#
+- name: ATDance — base server hardening (DigitalOcean Ubuntu)
+  hosts: all
+  become: true
+  vars:
+    deploy_username: deploy
+    deploy_ssh_public_key_path: "~/.ssh/id_ed25519.pub"
+    ufw_allowed_tcp_ports:
+      - "22"
+      - "80"
+      - "443"
+    fail2ban_bantime: "1h"
+    fail2ban_findtime: "10m"
+    fail2ban_maxretry: 4
+
+  tasks:
+    - name: Refresh apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install security packages
+      ansible.builtin.apt:
+        name:
+          - ufw
+          - fail2ban
+          - unattended-upgrades
+          - apt-listchanges
+          - openssh-server
+        state: present
+
+    - name: Ensure deploy user exists
+      ansible.builtin.user:
+        name: "{{ deploy_username }}"
+        shell: /bin/bash
+        groups: sudo
+        append: true
+        create_home: true
+
+    - name: Ensure deploy .ssh directory exists
+      ansible.builtin.file:
+        path: "/home/{{ deploy_username }}/.ssh"
+        state: directory
+        owner: "{{ deploy_username }}"
+        group: "{{ deploy_username }}"
+        mode: "0700"
+
+    - name: Install authorized_keys for deploy user
+      ansible.builtin.copy:
+        dest: "/home/{{ deploy_username }}/.ssh/authorized_keys"
+        content: "{{ lookup('file', deploy_ssh_public_key_path | expanduser) }}\n"
+        owner: "{{ deploy_username }}"
+        group: "{{ deploy_username }}"
+        mode: "0600"
+
+    - name: Allow deploy passwordless sudo (for automation — tighten if you prefer a password)
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/99-deploy
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+        content: |
+          {{ deploy_username }} ALL=(ALL) NOPASSWD:ALL
+
+    - name: Install sshd hardening drop-in
+      ansible.builtin.template:
+        src: sshd_hardening.conf.j2
+        dest: /etc/ssh/sshd_config.d/99-atdance-hardening.conf
+        mode: "0644"
+        owner: root
+        group: root
+      notify: Reload ssh safely
+
+    - name: Install fail2ban sshd jail
+      ansible.builtin.template:
+        src: fail2ban_jail_sshd.conf.j2
+        dest: /etc/fail2ban/jail.d/sshd.local
+        mode: "0644"
+      notify: Restart fail2ban
+
+    - name: Enable unattended-upgrades defaults
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        mode: "0644"
+        content: |
+          Unattended-Upgrade::Automatic-Update-Sections "security";
+
+    - name: Configure unattended-upgrades origins
+      ansible.builtin.template:
+        src: 50unattended-upgrades.j2
+        dest: /etc/apt/apt.conf.d/52atdance-unattended-upgrades
+        mode: "0644"
+
+    - name: Enable unattended-upgrades service
+      ansible.builtin.systemd:
+        name: unattended-upgrades
+        enabled: true
+        state: started
+
+    - name: Apply sshd + fail2ban handler reloads before UFW (keep current SSH session valid)
+      ansible.builtin.meta: flush_handlers
+
+    - name: UFW — default policies
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - ufw default deny incoming
+        - ufw default allow outgoing
+      changed_when: false
+
+    - name: UFW — allow required TCP ports
+      ansible.builtin.command: ufw allow {{ item }}/tcp
+      loop: "{{ ufw_allowed_tcp_ports }}"
+      changed_when: false
+
+    - name: UFW — enable firewall
+      ansible.builtin.command: ufw --force enable
+      register: ufw_enable
+      changed_when: "'Firewall is active' in ufw_enable.stdout or 'Firewall reloaded' in ufw_enable.stdout"
+
+    - name: Ensure fail2ban is enabled
+      ansible.builtin.systemd:
+        name: fail2ban
+        enabled: true
+        state: started
+
+  handlers:
+    - name: Reload ssh safely
+      ansible.builtin.shell: |
+        set -euo pipefail
+        sshd -t
+        systemctl reload ssh
+      args:
+        executable: /bin/bash
+
+    - name: Restart fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+        state: restarted

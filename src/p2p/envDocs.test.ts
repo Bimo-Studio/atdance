@@ -15,6 +15,12 @@ describe('P0.2 env documentation', () => {
     const text = readFileSync(p, 'utf8');
     expect(text).toMatch(/VITE_RELAY_WS/);
   });
+
+  it('.env.example documents optional VITE_SYNC_LAB_MODE', () => {
+    const p = resolve(process.cwd(), '.env.example');
+    const text = readFileSync(p, 'utf8');
+    expect(text).toMatch(/VITE_SYNC_LAB_MODE/);
+  });
 });
 
 describe('P0.2 README env documentation', () => {

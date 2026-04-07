@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 
+import { parseViteP2PBootstrap } from '@/p2p/bootstrapUrl';
+import { formatP2PSyncLabUserError } from '@/p2p/p2pSyncLabErrors';
 import { emaAlpha, ntpOffsetMs, ntpRttMs } from '@/sync/ntp';
 import { isOffsetUnstable } from '@/sync/syncStability';
 import { describeWebSocketClose, formatSyncLabUserError } from '@/sync/syncLabErrors';
@@ -9,6 +11,10 @@ import {
   type SyncPingV1,
   type SyncPongV1,
 } from '@/sync/syncMessage';
+import { randomTopicHex } from '@/p2p/randomTopic';
+import { isE2eMode, setE2eStatus } from '@/util/e2eFlags';
+import { syncLabP2pShareUrl } from '@/util/syncLabP2pShareUrl';
+import { syncLabP2pTopicLabel, syncLabTransportMode } from '@/util/syncLabMode';
 
 function relayWsUrl(): string {
   const v = import.meta.env.VITE_RELAY_WS;
@@ -29,6 +35,18 @@ export class SyncLabScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (syncLabTransportMode() === 'p2p') {
+      this.createP2p();
+    } else {
+      this.createRelay();
+    }
+    if (isE2eMode()) {
+      setE2eStatus(syncLabTransportMode() === 'p2p' ? 'sync-lab-p2p' : 'sync-lab-relay');
+    }
+  }
+
+  /** Legacy Cloudflare Worker WebSocket path (plan Phase 4). */
+  private createRelay(): void {
     const url = relayWsUrl();
     const dev = import.meta.env.DEV;
     const hasRelayUrl = url.length > 0;
@@ -188,6 +206,130 @@ export class SyncLabScene extends Phaser.Scene {
         void runSamples().catch((err: unknown) => {
           body.setText(`${formatSyncLabUserError(err, { dev, hasRelayUrl })}\nR — title`);
         });
+      }
+    });
+  }
+
+  /** P2P spike: hyperswarm-web echo (PRD P0). */
+  private createP2p(): void {
+    const dev = import.meta.env.DEV;
+    const raw = import.meta.env.VITE_P2P_BOOTSTRAP;
+    const parsed = parseViteP2PBootstrap(typeof raw === 'string' ? raw : undefined);
+    const topic = syncLabP2pTopicLabel();
+    const bootstrapLine = parsed.ok
+      ? `bootstrap: ${parsed.urls.join(', ')}`
+      : `bootstrap: ${parsed.message}`;
+
+    this.add
+      .text(this.scale.width / 2, 32, 'Clock sync lab (P2P)', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '22px',
+        color: '#e8e8f0',
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(this.scale.width / 2, 64, `topic: ${topic}`, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        color: '#8899aa',
+        align: 'center',
+        wordWrap: { width: this.scale.width - 40 },
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(this.scale.width / 2, 88, bootstrapLine, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        color: parsed.ok ? '#778899' : '#cc8866',
+        align: 'center',
+        wordWrap: { width: this.scale.width - 40 },
+      })
+      .setOrigin(0.5);
+
+    const body = this.add
+      .text(
+        this.scale.width / 2,
+        this.scale.height / 2 - 10,
+        parsed.ok
+          ? 'SPACE — run 10 NTP samples  •  C — copy join link  •  N — new random topic\n(open 2 tabs with same topic)  •  R — title'
+          : 'Fix VITE_P2P_BOOTSTRAP in .env.local (see README).\nR — title',
+        {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '15px',
+          color: '#aabbcc',
+          align: 'center',
+          wordWrap: { width: this.scale.width - 40 },
+        },
+      )
+      .setOrigin(0.5);
+
+    let running = false;
+
+    this.input.keyboard?.on('keydown', (ev: KeyboardEvent) => {
+      if (ev.code === 'KeyR') {
+        this.scene.start('TitleScene');
+        return;
+      }
+      if (ev.code === 'KeyN' && parsed.ok) {
+        const next = randomTopicHex(16);
+        window.location.assign(syncLabP2pShareUrl(window.location.href, next));
+        return;
+      }
+      if (ev.code === 'KeyC' && parsed.ok) {
+        const url = syncLabP2pShareUrl(window.location.href, topic);
+        void navigator.clipboard.writeText(url).then(
+          () => {
+            body.setText(
+              `Copied join link (${url.length} chars).\n\nSPACE — run samples  •  C — copy again  •  N — new topic  •  R — title`,
+            );
+          },
+          () => {
+            body.setText(
+              `Copy failed — select topic in the address bar manually.\n\n${url}\n\nR — title`,
+            );
+          },
+        );
+        return;
+      }
+      if (ev.code === 'Space') {
+        if (running || !parsed.ok) {
+          return;
+        }
+        running = true;
+        const lines: string[] = [];
+        void import('@/p2p/syncLabP2p')
+          .then(({ runSyncLabP2pNtpProbe }) =>
+            runSyncLabP2pNtpProbe({
+              topicLabel: topic,
+              onLog: (line) => {
+                lines.push(line);
+                body.setText(
+                  `${lines.join('\n')}\n\nSPACE — again  •  C — copy link  •  N — new topic  •  R — title`,
+                );
+              },
+            }),
+          )
+          .catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            let text = `${msg}\n\nR — title`;
+            if (msg.includes('VITE_P2P_BOOTSTRAP') || msg.includes('not set')) {
+              text = `${formatP2PSyncLabUserError('bootstrap_missing', { dev })}\nR — title`;
+            } else if (
+              msg.includes('peer timeout') ||
+              msg.includes('no connection') ||
+              msg.includes('pong timeout')
+            ) {
+              text = `${formatP2PSyncLabUserError('peer_timeout', { dev })}\nR — title`;
+            } else if (msg.includes('ICE') || msg.includes('ice')) {
+              text = `${formatP2PSyncLabUserError('ice_failed', { dev })}\nR — title`;
+            }
+            body.setText(text);
+          })
+          .finally(() => {
+            running = false;
+          });
       }
     });
   }

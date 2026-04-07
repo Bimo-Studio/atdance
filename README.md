@@ -72,14 +72,32 @@ This repo does not ship `docker-compose` for a PDS. For self-hosting, follow the
 - `?judge=beat` — pydance-style **BeatJudge** (tick windows from BPM).
 - `?chart=1` — second chart block in a multi-`SINGLE` file (e.g. MANIAC in `synrg.dance`).
 - `?e2e=1` — **Playwright / smoke:** skip title, land on **song select**; drives `#e2e-status` milestones (minimal fixture avoids long audio fetch).
+- `?e2e=1&sync_lab=1` — boot to **Sync Lab** (relay); add **`&sync=p2p`** for P2P mode — CI asserts `#e2e-status` is `sync-lab-relay` or `sync-lab-p2p` (see `e2e/syncLab.spec.ts`).
 
 ### Calibration
 
 On the title screen press **C** (or start the **Calibration** scene): eight 120 BPM beeps, tap **SPACE** or **click** on each beat. The median offset is stored in `localStorage` (`atdance.calibrationOffsetSec`) and applied in **PlayScene** so judging and note scroll use **effective time** = audio time minus that offset.
 
-### Clock sync lab (relay)
+### Clock sync lab (relay — Mode A, dev/legacy)
 
-Press **T** on the title screen to open **Sync Lab**: it connects to the relay WebSocket (dev default `ws://127.0.0.1:8787` while `pnpm relay:dev` is running), sends ten **ping** messages with UTC `t1`, receives **pong** with server `t2`/`t3`, and shows per-sample **offset** / **RTT** and an EMA of offset. If the socket drops, the UI explains the close reason and you can press **SPACE** again to reconnect. For staging or production, set `VITE_RELAY_WS` (e.g. `wss://your-worker.workers.dev`) before `pnpm build`.
+The **`relay/`** Cloudflare Worker is **optional** for **browser-to-browser P2P** (default Sync Lab P2P path uses **hyperswarm-web** only). Use the relay when you want the **queued pairing** / **room** behavior from Phase 4 or a **known** `wss://` without running a bootstrap server.
+
+Press **T** on the title screen to open **Sync Lab**: it connects to the relay WebSocket (dev default `ws://127.0.0.1:8787` while `pnpm relay:dev` is running), sends ten **ping** messages with UTC `t1`, receives **pong** with server `t2`/`t3`, and shows per-sample **offset** / **RTT** and an EMA of offset. If the socket drops, the UI explains the close reason and you can press **SPACE** again to reconnect. For staging or production, set **`VITE_RELAY_WS`** (e.g. `wss://your-worker.workers.dev`) before `pnpm build`. See **`docs/deployment-vercel-cloudflare.md`** for Worker deploy.
+
+### Clock sync lab (P2P)
+
+Use **hyperswarm-web** in the browser for peer discovery + WebRTC — **P2P plan:** `docs/p2p-plan.md`; requirements: `docs/prd-p2p-sync.md`. **Sync Lab** can run in P2P mode:
+
+1. Set **`VITE_P2P_BOOTSTRAP`** to the **base** `ws://` or `wss://` URL of your [hyperswarm-web](https://github.com/RangerMauve/hyperswarm-web) server (default CLI port **4977**). Do **not** include `/proxy` in the env value — the client appends `/proxy` and `/signal` itself.
+2. Run a bootstrap server locally, e.g. `npx hyperswarm-web` or `pnpm dlx hyperswarm-web` (or `pnpm exec hyperswarm-web` if installed globally).
+3. Open the app with **`?sync=p2p`** (or set **`VITE_SYNC_LAB_MODE=p2p`** before build). Optional: **`?topic=my-room`** so two tabs share the same topic string (SHA-256 topic key). In Sync Lab P2P: **C** copies a **join link**; **N** picks a **new random topic** and reloads.
+4. Open **two** tabs with the same `topic`, press **SPACE** on one (initiator runs **10 NTP samples**; the other tab answers **pong**). See `docs/architecture-p2p-holepunch.md`. Field validation: **`docs/p2p-sync-lab-manual-qa.md`**.
+
+The P2P module is **lazy-loaded** when you run the probe so the default relay build stays smaller until you use P2P.
+
+**ICE (STUN / TURN shape):** WebRTC uses `src/p2p/iceConfig.ts` — built-in **public STUN** URLs; optional extra URLs / TURN objects merge for symmetric NAT (full TURN wiring is **P3**). Bootstrap is typically **one small VPS** with `hyperswarm-web` — see `docs/architecture-p2p-holepunch.md` and `docs/deployment-vercel-cloudflare.md`.
+
+**NFR (P1 quick notes):** **N1** — compare median offset vs relay on a good network (same Sync Lab UI). **N2** — P2P code stays in the lazy chunk (`syncLabP2p-*.js`). **N3** — treat **`?topic=`** as **public** (anyone on the topic can join); do not put secrets in topic strings. **N4** — run bootstrap on a single low-cost host; document in architecture/deployment docs.
 
 ## Testing (see `plan.md`)
 
@@ -87,7 +105,7 @@ Press **T** on the title screen to open **Sync Lab**: it connects to the relay W
 - **Chart / judge:** `.dance` parsing, `buildNoteTimeline`, and judge windows are covered with **fixtures** and **ParseError** reports **1-based source line** on failure (plan Phase 1.1).
 - **Relay:** `relay/src/protocol.ts` is unit-tested without deploying (plan Phase 0.6).
 - **Cache:** `fetchChartTextCached` uses **fake-indexeddb** in Vitest for IndexedDB roundtrip (plan Phase 2.2).
-- **E2E:** `e2e/smoke.spec.ts` (Playwright) loads `/?e2e=1`, selects the **minimal fixture**, and asserts play start via `#e2e-status`. **CI** runs `pnpm build` → `playwright install chromium --with-deps` → `pnpm e2e`.
+- **E2E:** `e2e/smoke.spec.ts` loads `/?e2e=1` and drives play via `#e2e-status`; `e2e/syncLab.spec.ts` loads Sync Lab relay + P2P hooks. **CI** runs `pnpm build` → `playwright install chromium --with-deps` → `pnpm e2e`.
 
 ## Operator docs
 

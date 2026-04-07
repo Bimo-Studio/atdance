@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+# Never commit terraform.tfvars.
+
+do_token = "dop_v1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+region        = "nyc3"
+droplet_name  = "atdance-prod"
+droplet_size  = "s-1vcpu-1gb"
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+
+# After first successful login, set your public IP /32 here and drop 0.0.0.0/0 for SSH.
+# Example IPv4 only: management_cidrs = ["203.0.113.50/32"]
+management_cidrs = ["0.0.0.0/0", "::/0"]
+
+web_cidrs = ["0.0.0.0/0", "::/0"]
+
+enable_icmp = true
+
+tags = ["atdance", "production"]

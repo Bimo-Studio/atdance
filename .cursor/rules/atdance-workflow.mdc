@@ -5,6 +5,18 @@ alwaysApply: true
 
 # ATDance agent workflow
 
+## Human in the loop (minimize)
+
+- **Default:** keep implementing and testing until **`pnpm lint`**, **`pnpm typecheck`**, **`pnpm test`**, and (when relevant) **`pnpm build`** pass. Do **not** stop for the user to run commands, confirm plan steps, or do manual QA **unless** it is an **absolute blocker** (missing secret you cannot stub, destructive prod action, or a product decision that changes scope).
+- **Manual-only** proof (two-device WebRTC, etc.): ship code + automated tests first; leave a **short** checklist — do **not** block coding on it.
+
+### Check-in spam (avoid)
+
+- **Do not** ask “should I continue?”, “want me to run tests?”, or “okay to proceed?” — **run** the commands and continue until blocked or the slice is done.
+- **Do not** pause after each file or each sub-step for acknowledgment; batch into **one** coherent handoff per task block.
+- Short acknowledgments (**“neat”**, **“thanks”**, **“ok”**) are **not** stop signals — treat as conversation tone unless they say **stop**, **hold**, or **don’t**.
+- **You are coding, not configuring the IDE.** Do **not** tell the user to change Cursor plan/review settings, merge plans, or “try turning X off” — that is out of scope. Stay in the repo: read, edit, test, document.
+
 ## Before claiming a task done
 
 - Run **`pnpm lint`**, **`pnpm typecheck`**, **`pnpm test`** from repo root (use **`pnpm test:coverage`** when changing covered modules). Fix failures **in scope** before handoff.
@@ -25,6 +37,9 @@ alwaysApply: true
 
 - **Read** files before editing; ground claims in **`plan.md`**, **`docs/prd-*.md`**, **`docs/architecture-*.md`**, or code.
 - **P2P PRD work:** follow **`docs/tasks-p2p-prd.md`** in **order** (P0 → P1 → P2 → P3); do not skip phases or reorder without updating the checklist and PRD.
+- **P2P “keep going” (batch, not ping-pong):** Treat **go / continue / keep going / ok next** and **starting on the checklist Current focus** as **one loop iteration** over a **single numbered task** (e.g. **P1.1**): finish **all** its subtasks, **Tests**, and **DoD**, then **`pnpm lint && pnpm typecheck && pnpm test`** (and **`pnpm build`** if needed). Do **not** pause after one tiny edit for another prompt.
+- **Hard stops only:** ambiguous product choice; secrets; destructive actions needing explicit OK; or work that is **only** manual proof — automate the rest, leave a short manual checklist.
+- **End of iteration:** **what shipped**, **next unchecked subtask**, **blockers** — so “what’s next?” is not required.
 - **Testing layers:** see **`docs/test-plans.md`** (unit / functional / integration / BDD per system); **`docs/tasks-p2p-prd-test-matrix.md`** for P2P task-level proof.
 - Do **not** invent package APIs, env vars, or Cloudflare behavior — verify in repo or upstream docs.
 

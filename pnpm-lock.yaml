@@ -22,6 +22,9 @@ dependencies:
   '@atproto/syntax':
     specifier: ^0.5.3
     version: 0.5.3
+  buffer:
+    specifier: ^6.0.3
+    version: 6.0.3
   hyperswarm-web:
     specifier: ^2.2.0
     version: 2.2.0
@@ -31,6 +34,9 @@ dependencies:
   phaser:
     specifier: ^3.80.1
     version: 3.90.0
+  process:
+    specifier: ^0.11.10
+    version: 0.11.10
   webtorrent:
     specifier: ^2.8.5
     version: 2.8.5

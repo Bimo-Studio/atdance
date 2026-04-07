@@ -1,4 +1,20 @@
+import { Buffer } from 'buffer';
 import Phaser from 'phaser';
+
+Object.assign(globalThis, { Buffer });
+
+/** Minimal `process` for hyperswarm-web (`process.nextTick` in browser). */
+const g = globalThis as unknown as {
+  process?: { nextTick: (cb: () => void) => void; env: Record<string, string> };
+};
+if (!g.process) {
+  g.process = {
+    nextTick: (cb: () => void) => {
+      queueMicrotask(cb);
+    },
+    env: { NODE_ENV: import.meta.env.PROD ? 'production' : 'development' },
+  };
+}
 
 import { BootScene } from '@/scenes/BootScene';
 import { CalibrationScene } from '@/scenes/CalibrationScene';

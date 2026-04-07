@@ -10,6 +10,8 @@ This guide assumes **no prior DevOps experience**. You will use:
 
 The **browser** loads the game from Vercel and opens **`wss://…`** to the Worker. They are separate services; that is normal.
 
+**P2P note:** Sync Lab **Mode B** (`?sync=p2p`) uses **hyperswarm-web** + **`VITE_P2P_BOOTSTRAP`** and does **not** require this Worker. The Worker remains **Mode A** / dev / legacy pairing — see **`docs/architecture-p2p-holepunch.md`**.
+
 ---
 
 ## 0. What you need

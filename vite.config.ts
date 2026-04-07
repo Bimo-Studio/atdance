@@ -12,10 +12,14 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       webtorrent: webtorrentBrowser,
+      buffer: 'buffer',
     },
   },
+  define: {
+    global: 'globalThis',
+  },
   optimizeDeps: {
-    include: ['webtorrent/dist/webtorrent.min.js'],
+    include: ['webtorrent/dist/webtorrent.min.js', 'buffer', 'hyperswarm-web'],
   },
   server: {
     port: 5173,

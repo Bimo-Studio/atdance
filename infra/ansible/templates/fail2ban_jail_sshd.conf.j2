@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[sshd]
+enabled = true
+port = ssh
+logpath = %(sshd_log)s
+backend = systemd
+maxretry = {{ fail2ban_maxretry }}
+findtime = {{ fail2ban_findtime }}
+bantime = {{ fail2ban_bantime }}

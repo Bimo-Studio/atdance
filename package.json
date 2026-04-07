@@ -28,9 +28,11 @@
     "@atproto/common": "^0.5.15",
     "@atproto/oauth-client-browser": "^0.3.41",
     "@atproto/syntax": "^0.5.3",
+    "buffer": "^6.0.3",
     "hyperswarm-web": "^2.2.0",
     "idb-keyval": "^6.2.2",
     "phaser": "^3.80.1",
+    "process": "^0.11.10",
     "webtorrent": "^2.8.5",
     "zod": "^4.3.6"
   },

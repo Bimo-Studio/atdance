@@ -6,6 +6,12 @@ export function e2eFromSearch(search: string): boolean {
   return new URLSearchParams(q).get('e2e') === '1';
 }
 
+/** When `e2e=1`, boot straight to Sync Lab (Playwright smoke for relay vs P2P UI). */
+export function syncLabE2eFromSearch(search: string): boolean {
+  const q = search.startsWith('?') ? search.slice(1) : search;
+  return new URLSearchParams(q).get('sync_lab') === '1';
+}
+
 export function isE2eMode(): boolean {
   if (typeof window === 'undefined') {
     return false;
