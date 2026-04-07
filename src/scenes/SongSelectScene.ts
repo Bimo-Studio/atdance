@@ -23,7 +23,7 @@ export class SongSelectScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         100,
-        'Charts & audio cache in IndexedDB after first load.\nTorrent: paste magnet, Load — timeout → HTTP fallback.\nR — back to title',
+        'Charts & audio cache in IndexedDB after first load.\nTorrent: paste magnet, Load — timeout → HTTP fallback.\nI — build info  •  R — back to title',
         {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '14px',
@@ -52,6 +52,10 @@ export class SongSelectScene extends Phaser.Scene {
     }
 
     this.input.keyboard?.on('keydown', (ev: KeyboardEvent) => {
+      if (ev.code === 'KeyI') {
+        this.scene.start('InfoScene', { backSceneKey: 'SongSelectScene' });
+        return;
+      }
       if (ev.code === 'KeyR') {
         this.scene.start('TitleScene');
         return;

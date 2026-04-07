@@ -21,7 +21,7 @@ export class TitleScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height / 2 + 48,
-        'SPACE or click — song select  •  C — calibration  •  T — clock sync lab',
+        'SPACE or click — song select  •  I — build info  •  C — calibration  •  T — clock sync lab',
         {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '18px',
@@ -36,6 +36,10 @@ export class TitleScene extends Phaser.Scene {
     this.input.keyboard?.once('keydown-SPACE', goPlay);
     this.input.once('pointerdown', goPlay);
     this.input.keyboard?.on('keydown', (ev: KeyboardEvent) => {
+      if (ev.code === 'KeyI') {
+        this.scene.start('InfoScene', { backSceneKey: 'TitleScene' });
+        return;
+      }
       if (ev.code === 'KeyC') {
         this.scene.start('CalibrationScene');
       }

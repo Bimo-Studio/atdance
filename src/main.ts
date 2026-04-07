@@ -18,6 +18,7 @@ if (!g.process) {
 
 import { BootScene } from '@/scenes/BootScene';
 import { CalibrationScene } from '@/scenes/CalibrationScene';
+import { InfoScene } from '@/scenes/InfoScene';
 import { PlayScene } from '@/scenes/PlayScene';
 import { ResultsScene } from '@/scenes/ResultsScene';
 import { SongSelectScene } from '@/scenes/SongSelectScene';
@@ -43,6 +44,7 @@ void new Phaser.Game({
     BootScene,
     TitleScene,
     SongSelectScene,
+    InfoScene,
     PlayScene,
     ResultsScene,
     CalibrationScene,
