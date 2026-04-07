@@ -12,13 +12,13 @@
   become: true
   vars:
     deploy_username: deploy
-    deploy_ssh_public_key_path: "~/.ssh/id_ed25519.pub"
+    deploy_ssh_public_key_path: '~/.ssh/id_ed25519.pub'
     ufw_allowed_tcp_ports:
-      - "22"
-      - "80"
-      - "443"
-    fail2ban_bantime: "1h"
-    fail2ban_findtime: "10m"
+      - '22'
+      - '80'
+      - '443'
+    fail2ban_bantime: '1h'
+    fail2ban_findtime: '10m'
     fail2ban_maxretry: 4
 
   tasks:
@@ -39,7 +39,7 @@
 
     - name: Ensure deploy user exists
       ansible.builtin.user:
-        name: "{{ deploy_username }}"
+        name: '{{ deploy_username }}'
         shell: /bin/bash
         groups: sudo
         append: true
@@ -47,24 +47,24 @@
 
     - name: Ensure deploy .ssh directory exists
       ansible.builtin.file:
-        path: "/home/{{ deploy_username }}/.ssh"
+        path: '/home/{{ deploy_username }}/.ssh'
         state: directory
-        owner: "{{ deploy_username }}"
-        group: "{{ deploy_username }}"
-        mode: "0700"
+        owner: '{{ deploy_username }}'
+        group: '{{ deploy_username }}'
+        mode: '0700'
 
     - name: Install authorized_keys for deploy user
       ansible.builtin.copy:
-        dest: "/home/{{ deploy_username }}/.ssh/authorized_keys"
+        dest: '/home/{{ deploy_username }}/.ssh/authorized_keys'
         content: "{{ lookup('file', deploy_ssh_public_key_path | expanduser) }}\n"
-        owner: "{{ deploy_username }}"
-        group: "{{ deploy_username }}"
-        mode: "0600"
+        owner: '{{ deploy_username }}'
+        group: '{{ deploy_username }}'
+        mode: '0600'
 
     - name: Allow deploy passwordless sudo (for automation — tighten if you prefer a password)
       ansible.builtin.copy:
         dest: /etc/sudoers.d/99-deploy
-        mode: "0440"
+        mode: '0440'
         validate: /usr/sbin/visudo -cf %s
         content: |
           {{ deploy_username }} ALL=(ALL) NOPASSWD:ALL
@@ -73,7 +73,7 @@
       ansible.builtin.template:
         src: sshd_hardening.conf.j2
         dest: /etc/ssh/sshd_config.d/99-atdance-hardening.conf
-        mode: "0644"
+        mode: '0644'
         owner: root
         group: root
       notify: Reload ssh safely
@@ -82,13 +82,13 @@
       ansible.builtin.template:
         src: fail2ban_jail_sshd.conf.j2
         dest: /etc/fail2ban/jail.d/sshd.local
-        mode: "0644"
+        mode: '0644'
       notify: Restart fail2ban
 
     - name: Enable unattended-upgrades defaults
       ansible.builtin.copy:
         dest: /etc/apt/apt.conf.d/50unattended-upgrades
-        mode: "0644"
+        mode: '0644'
         content: |
           Unattended-Upgrade::Automatic-Update-Sections "security";
 
@@ -96,7 +96,7 @@
       ansible.builtin.template:
         src: 50unattended-upgrades.j2
         dest: /etc/apt/apt.conf.d/52atdance-unattended-upgrades
-        mode: "0644"
+        mode: '0644'
 
     - name: Enable unattended-upgrades service
       ansible.builtin.systemd:
@@ -108,7 +108,7 @@
       ansible.builtin.meta: flush_handlers
 
     - name: UFW — default policies
-      ansible.builtin.command: "{{ item }}"
+      ansible.builtin.command: '{{ item }}'
       loop:
         - ufw default deny incoming
         - ufw default allow outgoing
@@ -116,7 +116,7 @@
 
     - name: UFW — allow required TCP ports
       ansible.builtin.command: ufw allow {{ item }}/tcp
-      loop: "{{ ufw_allowed_tcp_ports }}"
+      loop: '{{ ufw_allowed_tcp_ports }}'
       changed_when: false
 
     - name: UFW — enable firewall

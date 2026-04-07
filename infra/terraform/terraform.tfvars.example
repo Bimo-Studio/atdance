@@ -1,5 +1,8 @@
 # Copy to terraform.tfvars (gitignored) and fill in.
 # Never commit terraform.tfvars.
+#
+# do_token = API access for Terraform (cannot be replaced by an SSH key). See README.md in
+# this folder.
 
 do_token = "dop_v1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 

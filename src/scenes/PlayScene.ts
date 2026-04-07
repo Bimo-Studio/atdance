@@ -21,7 +21,21 @@ import { directoryOfUrl } from '@/util/url';
 const JUDGESCALE = 1;
 const SCROLL_PX_PER_SEC = 280;
 const HIT_LINE_Y = 470;
+/** L, D, U, R — left-to-right on screen (matches `LaneIndex` 0..3). */
 const LANE_CENTER_X: readonly number[] = [120, 280, 440, 600];
+/** Scrolling note cues (same aspect as receptors, smaller). */
+const NOTE_W = 56;
+const NOTE_H = 28;
+/** Receptor “targets” on the hit line — slightly larger than scrolling cues. */
+const RECEPTOR_W = 68;
+const RECEPTOR_H = 38;
+
+const LANE_RECEPTOR_LABELS: readonly { arrow: string; name: string }[] = [
+  { arrow: '←', name: 'Left' },
+  { arrow: '↓', name: 'Down' },
+  { arrow: '↑', name: 'Up' },
+  { arrow: '→', name: 'Right' },
+];
 
 const DEMO_CHART_URL = '/songs/synrg/synrg.dance';
 
@@ -81,6 +95,8 @@ export class PlayScene extends Phaser.Scene {
   private playKey = '';
   private localBest: number | undefined;
   private doneScoreSaved = false;
+  /** Prevents overlapping beginAudio; pointer/Space can fire before async work finishes. */
+  private audioStartPending = false;
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -112,11 +128,33 @@ export class PlayScene extends Phaser.Scene {
     this.audioClock = null;
 
     this.graphics = this.add.graphics();
+    /** Above default (0) so lane labels / playfield paint is visible; HUD stays higher. */
+    this.graphics.setDepth(10);
+
+    const labelY = HIT_LINE_Y + RECEPTOR_H / 2 + 8;
+    for (let i = 0; i < 4; i += 1) {
+      const cx = LANE_CENTER_X[i];
+      const lab = LANE_RECEPTOR_LABELS[i];
+      if (cx === undefined || !lab) {
+        continue;
+      }
+      this.add
+        .text(cx, labelY, `${lab.arrow}\n${lab.name}`, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '14px',
+          color: '#b8c8d8',
+          align: 'center',
+        })
+        .setOrigin(0.5, 0)
+        .setDepth(15);
+    }
+
     this.hud = this.add.text(16, 16, '', {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '18px',
       color: '#e8e8f0',
     });
+    this.hud.setDepth(100);
     this.hint = this.add
       .text(480, 32, 'Loading chart…', {
         fontFamily: 'system-ui, sans-serif',
@@ -124,10 +162,23 @@ export class PlayScene extends Phaser.Scene {
         color: '#8899aa',
       })
       .setOrigin(0.5, 0);
+    this.hint.setDepth(100);
 
     void this.bootstrap();
 
+    const tryStart = (): void => {
+      if (!this.chartReady || this.started || this.audioStartPending) {
+        return;
+      }
+      void this.beginAudio();
+    };
+    this.input.on('pointerdown', tryStart);
     this.input.keyboard?.on('keydown', (ev: KeyboardEvent) => {
+      if (ev.code === 'Space') {
+        ev.preventDefault();
+        tryStart();
+        return;
+      }
       if (ev.code === 'KeyR') {
         this.scene.start('SongSelectScene');
         return;
@@ -224,19 +275,21 @@ export class PlayScene extends Phaser.Scene {
 
     this.chartReady = true;
     setE2eStatus('play-ready');
+    const firstScroll = this.notes[0]?.scrollAppearanceTimeSec;
+    const firstCueHint =
+      firstScroll !== undefined && firstScroll > 0.05
+        ? ` First scroll cue ~${firstScroll.toFixed(1)}s after start.`
+        : '';
     this.hint.setText(
-      `Click to start  •  Arrows = L/D/U/R  •  R = song list  •  judge=${this.judgeMode}  •  add synrg.ogg for audio`,
+      `Click or Space to start  •  ←↓↑→ = lanes  •  R = song list  •  judge=${this.judgeMode}${firstCueHint}`,
     );
     void getLocalBest(this.playKey).then((b) => {
       this.localBest = b;
       if (!this.started) {
         this.hint.setText(
-          `Click to start  •  local best ${b !== undefined ? String(b) : '—'}  •  Arrows = L/D/U/R  •  R = song list  •  judge=${this.judgeMode}  •  add synrg.ogg for audio`,
+          `Click or Space to start  •  local best ${b !== undefined ? String(b) : '—'}  •  ←↓↑→ = lanes  •  R = song list  •  judge=${this.judgeMode}${firstCueHint}`,
         );
       }
-    });
-    this.input.once('pointerdown', () => {
-      void this.beginAudio();
     });
   }
 
@@ -256,64 +309,81 @@ export class PlayScene extends Phaser.Scene {
     if (!this.chartReady) {
       return;
     }
-    if (this.started) {
+    if (this.started || this.audioStartPending) {
       return;
     }
-    const Ctx =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) {
-      this.hint.setText('Web Audio not available');
-      return;
-    }
-    this.hint.setText('Loading audio…');
-    this.audioCtx = new Ctx();
-    this.audioClock = new AudioClock(this.audioCtx);
-    await this.audioCtx.resume();
-
-    let t0 = this.audioCtx.currentTime;
-    let audioOk = false;
-
-    if (this.torrentAudioBuffer) {
-      try {
-        const buf = await decodeAudioArrayBuffer(this.audioCtx, this.torrentAudioBuffer);
-        const src = this.audioCtx.createBufferSource();
-        src.buffer = buf;
-        src.connect(this.audioCtx.destination);
-        t0 = this.audioCtx.currentTime;
-        src.start(t0);
-        this.bufferSource = src;
-        audioOk = true;
-      } catch {
-        this.bufferSource = null;
+    this.audioStartPending = true;
+    try {
+      const Ctx =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) {
+        this.hint.setText('Web Audio not available');
+        return;
       }
-    } else if (this.audioUrl) {
-      try {
-        const buf = await decodeAudioFromUrlCached(this.audioCtx, this.audioUrl);
-        const src = this.audioCtx.createBufferSource();
-        src.buffer = buf;
-        src.connect(this.audioCtx.destination);
-        t0 = this.audioCtx.currentTime;
-        src.start(t0);
-        this.bufferSource = src;
-        audioOk = true;
-      } catch {
-        this.bufferSource = null;
+      this.hint.setText('Loading audio…');
+      this.audioCtx = new Ctx();
+      this.audioClock = new AudioClock(this.audioCtx);
+      await this.audioCtx.resume();
+      // Suspended context freezes currentTime → song time stays 0 → no scroll cues and no audible clock.
+      if (this.audioCtx.state !== 'running') {
+        void this.audioCtx.close();
+        this.audioCtx = null;
+        this.audioClock = null;
+        this.hint.setText('Audio still blocked — click the game canvas (not just Space) to unlock');
+        return;
       }
-    }
 
-    if (!audioOk) {
-      t0 = this.audioCtx.currentTime;
-    }
+      let t0 = this.audioCtx.currentTime;
+      let audioOk = false;
 
-    this.audioStartSec = t0;
-    this.started = true;
-    setE2eStatus('play-started');
-    this.hint.setText(
-      audioOk
-        ? 'Playing audio — hit notes at the line'
-        : 'Silent clock (add .ogg to public/songs/synrg/) — hit notes at the line',
-    );
+      if (this.torrentAudioBuffer) {
+        try {
+          const buf = await decodeAudioArrayBuffer(this.audioCtx, this.torrentAudioBuffer);
+          const src = this.audioCtx.createBufferSource();
+          src.buffer = buf;
+          src.connect(this.audioCtx.destination);
+          t0 = this.audioCtx.currentTime;
+          src.start(t0);
+          this.bufferSource = src;
+          audioOk = true;
+        } catch {
+          this.bufferSource = null;
+        }
+      } else if (this.audioUrl) {
+        try {
+          const buf = await decodeAudioFromUrlCached(this.audioCtx, this.audioUrl);
+          const src = this.audioCtx.createBufferSource();
+          src.buffer = buf;
+          src.connect(this.audioCtx.destination);
+          t0 = this.audioCtx.currentTime;
+          src.start(t0);
+          this.bufferSource = src;
+          audioOk = true;
+        } catch {
+          this.bufferSource = null;
+        }
+      }
+
+      if (!audioOk) {
+        t0 = this.audioCtx.currentTime;
+      }
+
+      this.audioStartSec = t0;
+      this.started = true;
+      setE2eStatus('play-started');
+      let silentHint =
+        'No chart audio file (e.g. synrg.ogg) in public/songs/synrg/ — see public/songs/synrg/README.md. Silent timing.';
+      if (this.torrentAudioBuffer !== null || this.audioUrl !== null) {
+        silentHint =
+          'Audio failed to load or decode — check file path / format. Timing still runs (silent clock).';
+      }
+      this.hint.setText(
+        audioOk ? 'Playing audio — hit notes when cues meet the targets' : silentHint,
+      );
+    } finally {
+      this.audioStartPending = false;
+    }
   }
 
   private get songTimeSec(): number {
@@ -380,10 +450,20 @@ export class PlayScene extends Phaser.Scene {
     );
 
     this.graphics.clear();
-    this.graphics.lineStyle(2, 0xffffff, 0.35);
+    this.graphics.lineStyle(2, 0xffffff, 0.25);
     this.graphics.lineBetween(40, HIT_LINE_Y, this.scale.width - 40, HIT_LINE_Y);
+
+    const rh = RECEPTOR_H / 2;
+    const rw = RECEPTOR_W / 2;
     for (const cx of LANE_CENTER_X) {
-      this.graphics.lineStyle(1, 0x334455, 0.5);
+      this.graphics.fillStyle(0x2a3848, 0.55);
+      this.graphics.fillRect(cx - rw, HIT_LINE_Y - rh, RECEPTOR_W, RECEPTOR_H);
+      this.graphics.lineStyle(2, 0x7a9cbc, 0.95);
+      this.graphics.strokeRect(cx - rw, HIT_LINE_Y - rh, RECEPTOR_W, RECEPTOR_H);
+    }
+
+    for (const cx of LANE_CENTER_X) {
+      this.graphics.lineStyle(1, 0x334455, 0.45);
       this.graphics.lineBetween(cx, 80, cx, this.scale.height - 20);
     }
     for (const n of this.notes) {
@@ -402,7 +482,7 @@ export class PlayScene extends Phaser.Scene {
         continue;
       }
       this.graphics.fillStyle(0x5cb8ff, 1);
-      this.graphics.fillRect(x - 28, y - 14, 56, 28);
+      this.graphics.fillRect(x - NOTE_W / 2, y - NOTE_H / 2, NOTE_W, NOTE_H);
     }
 
     if (this.started && pending === 0 && t > this.lastNoteTimeSec + 0.75) {

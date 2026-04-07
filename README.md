@@ -131,7 +131,7 @@ StepMania `.sm` / `.ssc` support is **post-MVP** (see `plan.md`).
 
 ## Phase 0 — Hosting & demo assets (plan)
 
-- **Deploy (Vercel + Cloudflare Worker + DNS):** step-by-step guide for beginners: [`docs/deployment-vercel-cloudflare.md`](docs/deployment-vercel-cloudflare.md).
+- **Deploy (Vercel + Cloudflare Worker + DNS):** step-by-step guide for beginners: [`docs/deployment-vercel-cloudflare.md`](docs/deployment-vercel-cloudflare.md). **Lowest $ / lowest ops:** [`docs/deployment-shoestring.md`](docs/deployment-shoestring.md).
 - **Static app:** target production URL `https://dance.malldao.xyz` (or Vercel / Cloudflare Pages). CI builds a static `dist/`; deploy that folder.
 - **Relay Worker:** deploy `relay/` with Wrangler; set `VITE_RELAY_WS` / `VITE_PUBLIC_RELAY_WS` to the deployed `wss://` URL. **Cold starts** clear in-memory queue state; acceptable for MVP sync proof (see `plan.md` Appendix B).
 - **Demo charts on disk (maintainer):** reference pydance tree `beatgen/pydance/songs/` (SynRG, 6jan, Forkbomb). This repo ships a **minimal** subset under `public/songs/` for HTTP loading; do not add large binaries without checking license.

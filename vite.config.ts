@@ -19,7 +19,10 @@ export default defineConfig({
     global: 'globalThis',
   },
   optimizeDeps: {
-    include: ['webtorrent/dist/webtorrent.min.js', 'buffer', 'hyperswarm-web'],
+    // `webtorrent` is aliased to the prebuilt `min.js` — do not list
+    // `webtorrent/dist/...` here (Vite 6 + Node 24 can double-resolve to ENOTDIR).
+    include: ['buffer', 'hyperswarm-web'],
+    exclude: ['webtorrent'],
   },
   server: {
     port: 5173,

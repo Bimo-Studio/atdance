@@ -1,5 +1,7 @@
 # Deploy ATDance for testing: Vercel + Cloudflare (DNS)
 
+**Shoestring / lowest-ops path:** deploy static to **both** Vercel and Cloudflare Pages, pick a winner later — see **`docs/deployment-shoestring.md`**.
+
 This guide assumes **no prior DevOps experience**. You will use:
 
 | Piece                      | Role                                                         |
