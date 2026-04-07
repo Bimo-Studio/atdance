@@ -4,6 +4,13 @@
 declare const __APP_GIT_SHA__: string;
 
 interface ImportMetaEnv {
+  /** Override OAuth `client_id` (HTTPS URL of client metadata JSON). Default: `${origin}/oauth-client-metadata.json`. */
+  readonly VITE_ATPROTO_OAUTH_CLIENT_ID?: string;
+  /**
+   * Public app origin for build-time OAuth metadata when not on Vercel/CF (e.g. `https://staging.example.com`).
+   * Vercel sets `VERCEL_URL`; Cloudflare Pages sets `CF_PAGES_URL` during build.
+   */
+  readonly VITE_PUBLIC_APP_ORIGIN?: string;
   /** When `1`, only DIDs listed in `VITE_ATPROTO_ALLOWLIST_DIDS` may play (PRD P5). */
   readonly VITE_INVITE_ONLY?: string;
   /** Comma-separated DIDs allowed when invite-only mode is on. */

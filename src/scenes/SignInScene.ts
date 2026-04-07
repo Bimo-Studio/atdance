@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { createAtprotoOAuthClient } from '@/auth/streamplaceOAuth';
+import { loadAtprotoOAuthClient } from '@/auth/streamplaceOAuth';
 
 /**
  * Required when no ATProto session (PRD P0). OAuth client aligns with Streamplace patterns.
@@ -58,17 +58,19 @@ export class SignInScene extends Phaser.Scene {
     btn.style.cssText =
       'padding:8px 12px;cursor:pointer;border-radius:4px;border:1px solid #556677;background:#2a2a36;color:#e8e8f0;';
     btn.addEventListener('click', () => {
-      const h = input.value.trim();
-      if (!h) {
-        status.textContent = 'Enter your handle.';
-        return;
-      }
-      const client = createAtprotoOAuthClient();
-      if (!client) {
-        status.textContent = 'OAuth client unavailable (check env).';
-        return;
-      }
-      void client.signInRedirect(h);
+      void (async () => {
+        const h = input.value.trim();
+        if (!h) {
+          status.textContent = 'Enter your handle.';
+          return;
+        }
+        const client = await loadAtprotoOAuthClient();
+        if (!client) {
+          status.textContent = 'OAuth client unavailable (check env).';
+          return;
+        }
+        await client.signInRedirect(h);
+      })();
     });
     row.appendChild(input);
     row.appendChild(btn);

@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 describe('createAtprotoOAuthClient', () => {
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllEnvs();
+    const { resetAtprotoOAuthClientCacheForTests } = await import('@/auth/streamplaceOAuth');
+    resetAtprotoOAuthClientCacheForTests();
   });
 
   it('returns null when PDS host unset', async () => {
