@@ -58,6 +58,7 @@ Tools and prompts **reduce** drift; they **do not** mathematically guarantee cor
 
 ## Drift prevention
 
+- **Task checkboxes**: merges that finish a row in **`docs/tasks-*.md`** (especially **`docs/tasks-pvp-real-sync.md`**) must **update that checkbox and PRD mapping in the same change set** — see that file’s **Update rules**. Underselling or overselling **`[x]`** versus `main` is a process failure, not a documentation nicety.
 - **Lock files**: after dependency changes, commit **`pnpm-lock.yaml`**.
 - **Env / Vite**: document new `VITE_*` in **README** and **`.env.example`** when added.
 - **Contradiction**: if `plan.md` and a PRD disagree, **stop** and reconcile docs **before** coding the ambiguous part.

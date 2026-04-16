@@ -8,22 +8,23 @@ import { getCalibrationOffsetSec } from '@/calibration/storage';
 import { MINIMAL_DANCE_CHART } from '@/chart/fixtures/minimal';
 import { buildNoteTimeline } from '@/chart/dance/buildTimeline';
 import { parseDanceFile } from '@/chart/dance/parseDance';
+import { arrowPointsForLane } from '@/game/arrowPolygon';
 import { DEFAULT_RENDER_OPTIONS } from '@/game/buildRenderPlan';
 import { buildLaneNotesFromEvents, type LaneIndex, type LaneNote } from '@/game/laneNotes';
 import { isMissLateBeat, rateBeatJudge } from '@/judge/beatJudge';
 import { isMissLate, rateTimeJudge, type JudgmentGrade, type TimeGrade } from '@/judge/timeJudge';
+import { msUntilWallUnixMs, pvpSongTimeAlignment } from '@/play/pvpAudioAlignment';
+import { playfieldLayoutForWidth } from '@/play/pvpPlayLayout';
 import type { PlaySceneData } from '@/play/playSceneData';
 import { dancePointsIncrement, summarizeDancePoints } from '@/scoring/dancePoints';
 import { buildPlayKey, getLocalBest, saveLocalBestIfBetter } from '@/scores/localBest';
 import { songIdFromPlaySceneData } from '@/songSelect/songIdFromPlayData';
-import { setE2eStatus } from '@/util/e2eFlags';
+import { isE2eMode, setE2ePvpPlayLayout, setE2eStatus } from '@/util/e2eFlags';
 import { directoryOfUrl } from '@/util/url';
 
 const JUDGESCALE = 1;
 const SCROLL_PX_PER_SEC = 280;
 const HIT_LINE_Y = 470;
-/** L, D, U, R — left-to-right on screen (matches `LaneIndex` 0..3). */
-const LANE_CENTER_X: readonly number[] = [120, 280, 440, 600];
 /** Scrolling note cues (same aspect as receptors, smaller). */
 const NOTE_W = 56;
 const NOTE_H = 28;
@@ -31,12 +32,13 @@ const NOTE_H = 28;
 const RECEPTOR_W = 68;
 const RECEPTOR_H = 38;
 
-const LANE_RECEPTOR_LABELS: readonly { arrow: string; name: string }[] = [
-  { arrow: '←', name: 'Left' },
-  { arrow: '↓', name: 'Down' },
-  { arrow: '↑', name: 'Up' },
-  { arrow: '→', name: 'Right' },
-];
+const LANE_RECEPTOR_LABELS: readonly string[] = ['Left', 'Down', 'Up', 'Right'];
+
+/** Muted slate + single cool accent — readable without rainbow panels. */
+const RECEPTOR_FILL = 0x243448;
+const RECEPTOR_FILL_ALPHA = 0.62;
+const RECEPTOR_STROKE = 0x7a9cbc;
+const NOTE_FILL = 0x5a9fd0;
 
 const DEMO_CHART_URL = '/songs/synrg/synrg.dance';
 
@@ -68,10 +70,69 @@ function parseChartIndexFromUrl(): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+function fillClosedPolygon(
+  g: Phaser.GameObjects.Graphics,
+  points: readonly { x: number; y: number }[],
+  fillColor: number,
+  fillAlpha: number,
+): void {
+  if (points.length < 3) {
+    return;
+  }
+  const p0 = points[0];
+  if (!p0) {
+    return;
+  }
+  g.fillStyle(fillColor, fillAlpha);
+  g.beginPath();
+  g.moveTo(p0.x, p0.y);
+  for (let i = 1; i < points.length; i += 1) {
+    const p = points[i];
+    if (p) {
+      g.lineTo(p.x, p.y);
+    }
+  }
+  g.closePath();
+  g.fillPath();
+}
+
+function strokeClosedPolygon(
+  g: Phaser.GameObjects.Graphics,
+  points: readonly { x: number; y: number }[],
+  lineWidth: number,
+  color: number,
+  alpha: number,
+): void {
+  if (points.length < 3) {
+    return;
+  }
+  const p0 = points[0];
+  if (!p0) {
+    return;
+  }
+  g.lineStyle(lineWidth, color, alpha);
+  g.beginPath();
+  g.moveTo(p0.x, p0.y);
+  for (let i = 1; i < points.length; i += 1) {
+    const p = points[i];
+    if (p) {
+      g.lineTo(p.x, p.y);
+    }
+  }
+  g.closePath();
+  g.strokePath();
+}
+
 export class PlayScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Text;
   private hint!: Phaser.GameObjects.Text;
+  /** PvP: opponent summary (G7 minimal strip). */
+  private peerHud: Phaser.GameObjects.Text | null = null;
+  /** L, D, U, R lane centers — set in `create` from {@link playfieldLayoutForWidth}. */
+  private laneCenterX: readonly number[] = [];
+  private playfieldRightX = 0;
+  private pvpSplitDividerX: number | null = null;
 
   private notes: LaneNote[] = [];
   private audioCtx: AudioContext | null = null;
@@ -98,6 +159,7 @@ export class PlayScene extends Phaser.Scene {
   private doneScoreSaved = false;
   /** Prevents overlapping beginAudio; pointer/Space can fire before async work finishes. */
   private audioStartPending = false;
+  private lastPvpScoreTickMs = 0;
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -130,6 +192,14 @@ export class PlayScene extends Phaser.Scene {
     this.playKey = '';
     this.localBest = undefined;
     this.audioClock = null;
+    this.peerHud = null;
+    this.lastPvpScoreTickMs = 0;
+
+    const pvpPanel = this.playData.pvp?.remoteHudRef !== undefined;
+    const layout = playfieldLayoutForWidth(this.scale.width, pvpPanel);
+    this.laneCenterX = layout.laneCenters;
+    this.playfieldRightX = layout.playfieldRightX;
+    this.pvpSplitDividerX = layout.splitDividerX;
 
     this.graphics = this.add.graphics();
     /** Above default (0) so lane labels / playfield paint is visible; HUD stays higher. */
@@ -137,16 +207,16 @@ export class PlayScene extends Phaser.Scene {
 
     const labelY = HIT_LINE_Y + RECEPTOR_H / 2 + 8;
     for (let i = 0; i < 4; i += 1) {
-      const cx = LANE_CENTER_X[i];
+      const cx = this.laneCenterX[i];
       const lab = LANE_RECEPTOR_LABELS[i];
-      if (cx === undefined || !lab) {
+      if (cx === undefined || lab === undefined) {
         continue;
       }
       this.add
-        .text(cx, labelY, `${lab.arrow}\n${lab.name}`, {
+        .text(cx, labelY, lab, {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '14px',
-          color: '#b8c8d8',
+          fontSize: '13px',
+          color: '#a8b8c8',
           align: 'center',
         })
         .setOrigin(0.5, 0)
@@ -159,8 +229,22 @@ export class PlayScene extends Phaser.Scene {
       color: '#e8e8f0',
     });
     this.hud.setDepth(100);
+    if (pvpPanel && this.pvpSplitDividerX !== null) {
+      const wrap = Math.max(120, this.scale.width - this.pvpSplitDividerX - 20);
+      this.peerHud = this.add
+        .text(this.pvpSplitDividerX + 14, 68, 'Opponent\n…', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '15px',
+          color: '#9ab8d8',
+          lineSpacing: 4,
+          wordWrap: { width: wrap },
+        })
+        .setOrigin(0, 0);
+      this.peerHud.setDepth(100);
+    }
+    const hintCx = (this.laneCenterX[0]! + this.laneCenterX[3]!) / 2;
     this.hint = this.add
-      .text(480, 32, 'Loading chart…', {
+      .text(hintCx, 32, 'Loading chart…', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '16px',
         color: '#8899aa',
@@ -201,6 +285,7 @@ export class PlayScene extends Phaser.Scene {
       }
       void this.audioCtx?.close();
       this.audioClock = null;
+      this.playData.pvp?.closeRelay?.();
     });
   }
 
@@ -279,6 +364,9 @@ export class PlayScene extends Phaser.Scene {
 
     this.chartReady = true;
     setE2eStatus('play-ready');
+    if (isE2eMode()) {
+      setE2ePvpPlayLayout(this.playData.pvp?.remoteHudRef !== undefined ? 'split' : 'solo');
+    }
     const firstScroll = this.notes[0]?.scrollAppearanceTimeSec;
     const firstCueHint =
       firstScroll !== undefined && firstScroll > 0.05
@@ -295,6 +383,10 @@ export class PlayScene extends Phaser.Scene {
         );
       }
     });
+
+    if (this.playData.pvp?.autoStartAudio) {
+      void this.beginAudio();
+    }
   }
 
   private rate(offsetSec: number): TimeGrade | null {
@@ -338,8 +430,17 @@ export class PlayScene extends Phaser.Scene {
         return;
       }
 
+      const agreed = this.playData.pvp?.agreedStartAtUnixMs;
+      if (agreed !== undefined) {
+        const waitMs = msUntilWallUnixMs(agreed, Date.now());
+        if (waitMs > 0) {
+          await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+        }
+      }
+
       let t0 = this.audioCtx.currentTime;
       let audioOk = false;
+      let audioStartSec = t0;
 
       if (this.torrentAudioBuffer) {
         try {
@@ -348,7 +449,11 @@ export class PlayScene extends Phaser.Scene {
           src.buffer = buf;
           src.connect(this.audioCtx.destination);
           t0 = this.audioCtx.currentTime;
-          src.start(t0);
+          const wantOffset =
+            agreed !== undefined ? pvpSongTimeAlignment(agreed, Date.now(), t0).bufferOffsetSec : 0;
+          const offset = Math.min(wantOffset, Math.max(0, buf.duration - 0.001));
+          src.start(t0, offset);
+          audioStartSec = t0 - offset;
           this.bufferSource = src;
           audioOk = true;
         } catch {
@@ -361,7 +466,11 @@ export class PlayScene extends Phaser.Scene {
           src.buffer = buf;
           src.connect(this.audioCtx.destination);
           t0 = this.audioCtx.currentTime;
-          src.start(t0);
+          const wantOffset =
+            agreed !== undefined ? pvpSongTimeAlignment(agreed, Date.now(), t0).bufferOffsetSec : 0;
+          const offset = Math.min(wantOffset, Math.max(0, buf.duration - 0.001));
+          src.start(t0, offset);
+          audioStartSec = t0 - offset;
           this.bufferSource = src;
           audioOk = true;
         } catch {
@@ -371,9 +480,11 @@ export class PlayScene extends Phaser.Scene {
 
       if (!audioOk) {
         t0 = this.audioCtx.currentTime;
+        audioStartSec =
+          agreed !== undefined ? pvpSongTimeAlignment(agreed, Date.now(), t0).audioStartSec : t0;
       }
 
-      this.audioStartSec = t0;
+      this.audioStartSec = audioStartSec;
       this.started = true;
       setE2eStatus('play-started');
       let silentHint =
@@ -453,20 +564,51 @@ export class PlayScene extends Phaser.Scene {
       `${this.songLabel}  |  ${this.judgeMode}  |  t=${t.toFixed(2)}s (raw ${rawT.toFixed(2)})  cal=${(this.calOffsetSec * 1000).toFixed(0)}ms\nscore=${this.score}  combo=${this.combo}  last=${this.lastGrade || '—'}  ok=${hit}  miss=${missed}  pending=${pending}  best=${bestStr}`,
     );
 
-    this.graphics.clear();
-    this.graphics.lineStyle(2, 0xffffff, 0.25);
-    this.graphics.lineBetween(40, HIT_LINE_Y, this.scale.width - 40, HIT_LINE_Y);
-
-    const rh = RECEPTOR_H / 2;
-    const rw = RECEPTOR_W / 2;
-    for (const cx of LANE_CENTER_X) {
-      this.graphics.fillStyle(0x2a3848, 0.55);
-      this.graphics.fillRect(cx - rw, HIT_LINE_Y - rh, RECEPTOR_W, RECEPTOR_H);
-      this.graphics.lineStyle(2, 0x7a9cbc, 0.95);
-      this.graphics.strokeRect(cx - rw, HIT_LINE_Y - rh, RECEPTOR_W, RECEPTOR_H);
+    const peerRef = this.playData.pvp?.remoteHudRef;
+    if (this.peerHud !== null && peerRef !== undefined) {
+      this.peerHud.setText(
+        `Opponent\nscore ${peerRef.score}\ncombo ${peerRef.combo}\nmiss ${peerRef.miss}`,
+      );
     }
 
-    for (const cx of LANE_CENTER_X) {
+    const sendPvp = this.playData.pvp?.sendPvp;
+    if (this.started && sendPvp !== undefined) {
+      const now = Date.now();
+      if (now - this.lastPvpScoreTickMs >= 200) {
+        this.lastPvpScoreTickMs = now;
+        sendPvp({
+          type: 'pvp.v1.scoreTick',
+          combo: this.combo,
+          miss: missed,
+          score: this.score,
+        });
+      }
+    }
+
+    this.graphics.clear();
+    this.graphics.lineStyle(2, 0xffffff, 0.25);
+    this.graphics.lineBetween(40, HIT_LINE_Y, this.playfieldRightX, HIT_LINE_Y);
+    if (this.pvpSplitDividerX !== null) {
+      this.graphics.lineStyle(2, 0x556677, 0.45);
+      this.graphics.lineBetween(
+        this.pvpSplitDividerX,
+        56,
+        this.pvpSplitDividerX,
+        this.scale.height - 28,
+      );
+    }
+
+    for (let lane = 0; lane < 4; lane += 1) {
+      const cx = this.laneCenterX[lane];
+      if (cx === undefined) {
+        continue;
+      }
+      const pts = arrowPointsForLane(lane as LaneIndex, cx, HIT_LINE_Y, RECEPTOR_W, RECEPTOR_H);
+      fillClosedPolygon(this.graphics, pts, RECEPTOR_FILL, RECEPTOR_FILL_ALPHA);
+      strokeClosedPolygon(this.graphics, pts, 2, RECEPTOR_STROKE, 0.92);
+    }
+
+    for (const cx of this.laneCenterX) {
       this.graphics.lineStyle(1, 0x334455, 0.45);
       this.graphics.lineBetween(cx, 80, cx, this.scale.height - 20);
     }
@@ -481,12 +623,13 @@ export class PlayScene extends Phaser.Scene {
       if (y < -40 || y > this.scale.height + 40) {
         continue;
       }
-      const x = LANE_CENTER_X[n.lane];
+      const x = this.laneCenterX[n.lane];
       if (x === undefined) {
         continue;
       }
-      this.graphics.fillStyle(0x5cb8ff, 1);
-      this.graphics.fillRect(x - NOTE_W / 2, y - NOTE_H / 2, NOTE_W, NOTE_H);
+      const notePts = arrowPointsForLane(n.lane, x, y, NOTE_W, NOTE_H);
+      fillClosedPolygon(this.graphics, notePts, NOTE_FILL, 1);
+      strokeClosedPolygon(this.graphics, notePts, 1, 0x2a4058, 0.85);
     }
 
     if (this.started && pending === 0 && t > this.lastNoteTimeSec + 0.75) {

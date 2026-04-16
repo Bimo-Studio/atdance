@@ -26,6 +26,16 @@ describe('parseSyncMessageV1 (plan Phase 4.1)', () => {
     });
   });
 
+  it('parses paired with peerPlayerDid', () => {
+    const j = '{"type":"paired","roomId":"r1","peerClientId":"c2","peerPlayerDid":"did:plc:peer"}';
+    expect(parseSyncMessageV1(j)).toEqual({
+      type: 'paired',
+      roomId: 'r1',
+      peerClientId: 'c2',
+      peerPlayerDid: 'did:plc:peer',
+    });
+  });
+
   it('parses ping', () => {
     const j = '{"type":"ping","id":"abc","t1":1700000000000}';
     expect(parseSyncMessageV1(j)).toEqual({ type: 'ping', id: 'abc', t1: 1700000000000 });
@@ -34,6 +44,16 @@ describe('parseSyncMessageV1 (plan Phase 4.1)', () => {
   it('parses pong', () => {
     const j = '{"type":"pong","id":"abc","t1":1,"t2":2,"t3":3}';
     expect(parseSyncMessageV1(j)).toEqual({ type: 'pong', id: 'abc', t1: 1, t2: 2, t3: 3 });
+  });
+
+  it('parses pvpWire', () => {
+    const j =
+      '{"type":"pvpWire","roomId":"r1","body":"{\\"type\\":\\"pvp.v1.ping\\",\\"id\\":\\"x\\",\\"t1\\":1}"}';
+    expect(parseSyncMessageV1(j)).toEqual({
+      type: 'pvpWire',
+      roomId: 'r1',
+      body: '{"type":"pvp.v1.ping","id":"x","t1":1}',
+    });
   });
 
   it('parses syncSample', () => {

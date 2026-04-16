@@ -2,8 +2,10 @@
  * ATProto OAuth client factory aligned with [Streamplace](https://github.com/streamplace/streamplace)
  * (`js/app` uses `@atproto/oauth-client` + `@atproto/oauth-client-browser`).
  *
- * **Loopback (localhost / 127.0.0.1 / ::1):** `clientMetadata` may be omitted — see
- * [@atproto/oauth-client-browser README](https://github.com/bluesky-social/atproto/blob/main/packages/oauth/oauth-client-browser/README.md).
+ * **Loopback (localhost / 127.0.0.1 / ::1):** pass `clientMetadata` from
+ * {@link buildAtprotoLoopbackClientMetadata} with explicit `redirect_uris`. The browser
+ * package default embeds `location.pathname` in `client_id`, which is invalid for `/admin`
+ * (ATProto allows only `http://localhost` + query on loopback client IDs).
  *
  * **HTTPS (Vercel, Cloudflare Pages, etc.):** use `BrowserOAuthClient.load` with a hosted
  * `client_id` URL. Build emits `oauth-client-metadata.json` when `VERCEL_URL`, `CF_PAGES_URL`,
@@ -11,6 +13,9 @@
  * `${origin}/oauth-client-metadata.json` at runtime (file must exist in `dist`).
  */
 import { BrowserOAuthClient } from '@atproto/oauth-client-browser';
+import { buildAtprotoLoopbackClientMetadata } from '@atproto/oauth-types';
+
+import { atdanceLoopbackRedirectUris } from '@/auth/loopbackOAuthRedirectUris';
 
 export type { BrowserOAuthClient };
 
@@ -41,8 +46,12 @@ async function instantiateBrowserOAuthClient(): Promise<BrowserOAuthClient | nul
   }
 
   if (typeof window !== 'undefined' && isBrowserLoopbackHost(window.location.hostname)) {
+    const clientMetadata = buildAtprotoLoopbackClientMetadata({
+      redirect_uris: atdanceLoopbackRedirectUris(window.location.origin),
+    });
     return new BrowserOAuthClient({
       handleResolver,
+      clientMetadata,
     });
   }
 
@@ -76,8 +85,12 @@ export function createAtprotoOAuthClient(): BrowserOAuthClient | null {
     return null;
   }
   if (isBrowserLoopbackHost(window.location.hostname)) {
+    const clientMetadata = buildAtprotoLoopbackClientMetadata({
+      redirect_uris: atdanceLoopbackRedirectUris(window.location.origin),
+    });
     return new BrowserOAuthClient({
       handleResolver,
+      clientMetadata,
     });
   }
   return null;

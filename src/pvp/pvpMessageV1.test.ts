@@ -31,4 +31,18 @@ describe('pvpMessageV1', () => {
     expect(parsePvpMessageV1(stringifyPvpMessageV1(a))).toEqual(a);
     expect(parsePvpMessageV1(stringifyPvpMessageV1(b))).toEqual(b);
   });
+
+  it('round-trips chartOffer, chartAck, scoreTick', () => {
+    const offer: PvpMessageV1 = {
+      type: 'pvp.v1.chartOffer',
+      chartUrl: '/songs/a/a.dance',
+      preferenceRank: 0,
+      tieBreakId: 'c1',
+    };
+    const ack: PvpMessageV1 = { type: 'pvp.v1.chartAck', chartUrl: '/songs/a/a.dance' };
+    const tick: PvpMessageV1 = { type: 'pvp.v1.scoreTick', combo: 3, miss: 1, score: 120 };
+    expect(parsePvpMessageV1(stringifyPvpMessageV1(offer))).toEqual(offer);
+    expect(parsePvpMessageV1(stringifyPvpMessageV1(ack))).toEqual(ack);
+    expect(parsePvpMessageV1(stringifyPvpMessageV1(tick))).toEqual(tick);
+  });
 });

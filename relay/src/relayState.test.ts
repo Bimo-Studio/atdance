@@ -48,6 +48,46 @@ describe('relay state machine (plan Phase 4.2)', () => {
     expect(r.effects).toEqual([]);
   });
 
+  it('forwards pvpWire to peer when roomId matches sender room', () => {
+    let s = createRelayState();
+    s = applyRelayMessage(s, 'a', { type: 'joinQueue', clientId: 'a' }).state;
+    const r2 = applyRelayMessage(s, 'b', { type: 'joinQueue', clientId: 'b' });
+    s = r2.state;
+    const roomId = [...s.rooms.keys()][0]!;
+    const wire = {
+      type: 'pvpWire' as const,
+      roomId,
+      body: '{"type":"pvp.v1.chartAck","chartUrl":"/x.dance"}',
+    };
+    const r3 = applyRelayMessage(s, 'a', wire);
+    expect(sendTo(r3.effects, 'b')[0]).toEqual(wire);
+    expect(sendTo(r3.effects, 'a')).toEqual([]);
+  });
+
+  it('drops pvpWire when body exceeds size limit', () => {
+    let s = createRelayState();
+    s = applyRelayMessage(s, 'a', { type: 'joinQueue', clientId: 'a' }).state;
+    const r2 = applyRelayMessage(s, 'b', { type: 'joinQueue', clientId: 'b' });
+    s = r2.state;
+    const roomId = [...s.rooms.keys()][0]!;
+    const huge = 'x'.repeat(9000);
+    const r3 = applyRelayMessage(s, 'a', { type: 'pvpWire', roomId, body: huge });
+    expect(r3.effects).toEqual([]);
+  });
+
+  it('drops pvpWire when roomId does not match sender', () => {
+    let s = createRelayState();
+    s = applyRelayMessage(s, 'a', { type: 'joinQueue', clientId: 'a' }).state;
+    const r2 = applyRelayMessage(s, 'b', { type: 'joinQueue', clientId: 'b' });
+    s = r2.state;
+    const r3 = applyRelayMessage(s, 'a', {
+      type: 'pvpWire',
+      roomId: 'room-bogus',
+      body: '{}',
+    });
+    expect(r3.effects).toEqual([]);
+  });
+
   it('forwards syncSample to peer in the same room', () => {
     let s = createRelayState();
     s = applyRelayMessage(s, 'a', { type: 'joinQueue', clientId: 'a' }).state;
@@ -140,8 +180,21 @@ describe('relay state machine (plan Phase 4.2)', () => {
     expect(r.state.rooms.size).toBe(1);
     expect(sendTo(r.effects, 'a').length).toBeGreaterThan(0);
     const room = [...r.state.rooms.values()][0]!;
+    const roomId = room.roomId;
     expect(room.didA).toBe('did:plc:a');
     expect(room.didB).toBe('did:plc:b');
+    expect(sendTo(r.effects, 'a')[0]).toEqual({
+      type: 'paired',
+      roomId,
+      peerClientId: 'b',
+      peerPlayerDid: 'did:plc:b',
+    });
+    expect(sendTo(r.effects, 'b')[0]).toEqual({
+      type: 'paired',
+      roomId,
+      peerClientId: 'a',
+      peerPlayerDid: 'did:plc:a',
+    });
   });
 
   it('records optional DIDs on room when joinQueue sends playerDid', () => {
@@ -160,5 +213,18 @@ describe('relay state machine (plan Phase 4.2)', () => {
     const room = [...r.state.rooms.values()][0]!;
     expect(room.didA).toBe('did:plc:alice');
     expect(room.didB).toBe('did:plc:bob');
+    const roomId = room.roomId;
+    expect(sendTo(r.effects, 'a')[0]).toEqual({
+      type: 'paired',
+      roomId,
+      peerClientId: 'b',
+      peerPlayerDid: 'did:plc:bob',
+    });
+    expect(sendTo(r.effects, 'b')[0]).toEqual({
+      type: 'paired',
+      roomId,
+      peerClientId: 'a',
+      peerPlayerDid: 'did:plc:alice',
+    });
   });
 });

@@ -28,6 +28,12 @@ test.describe('PvP lobby stub', () => {
     await expect(page.locator('#e2e-pvp-lobby')).toHaveAttribute('data-phase', 'play', {
       timeout: 15_000,
     });
+    await expect(page.locator('#e2e-status')).toHaveAttribute('data-status', 'play-ready', {
+      timeout: 20_000,
+    });
+    await expect(page.locator('#e2e-pvp-play')).toHaveAttribute('data-layout', 'solo', {
+      timeout: 5_000,
+    });
     await expect(page.locator('#game-root canvas')).toBeVisible();
   });
 });

@@ -1,7 +1,10 @@
 import Phaser from 'phaser';
 
-import { canPlay } from '@/auth/authGate';
+import { canPlayAsync } from '@/auth/authGate';
+import { isDevAuthBypass } from '@/auth/devAuthBypass';
 import { getAtprotoOAuthSession, initAtprotoSessionOnBoot } from '@/auth/atprotoSession';
+import { startInviteAllowlistWatcher } from '@/auth/inviteAllowlistWatch';
+import { markInviteRelayGatePassed } from '@/auth/inviteRelayGate';
 import { isE2eMode, syncLabE2eFromSearch } from '@/util/e2eFlags';
 
 export class BootScene extends Phaser.Scene {
@@ -21,13 +24,27 @@ export class BootScene extends Phaser.Scene {
       return;
     }
 
+    if (isDevAuthBypass()) {
+      void initAtprotoSessionOnBoot().finally(() => {
+        this.scene.start('TitleScene');
+      });
+      return;
+    }
+
     void initAtprotoSessionOnBoot().finally(() => {
-      const session = getAtprotoOAuthSession();
-      if (!canPlay(session)) {
-        this.scene.start('SignInScene');
-        return;
-      }
-      this.scene.start('TitleScene');
+      void (async () => {
+        const session = getAtprotoOAuthSession();
+        if (!(await canPlayAsync(session))) {
+          this.scene.start('SignInScene');
+          return;
+        }
+        const sub = session?.sub?.trim();
+        if (sub !== undefined && sub.startsWith('did:')) {
+          markInviteRelayGatePassed(sub);
+        }
+        startInviteAllowlistWatcher();
+        this.scene.start('TitleScene');
+      })();
     });
   }
 }

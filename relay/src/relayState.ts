@@ -133,9 +133,21 @@ export function applyRelayMessage(
     });
     m.clientRoom.set(a, roomId);
     m.clientRoom.set(b, roomId);
+    const toA: SyncMessageV1 = {
+      type: 'paired',
+      roomId,
+      peerClientId: b,
+      ...(didB !== undefined && didB !== '' ? { peerPlayerDid: didB } : {}),
+    };
+    const toB: SyncMessageV1 = {
+      type: 'paired',
+      roomId,
+      peerClientId: a,
+      ...(didA !== undefined && didA !== '' ? { peerPlayerDid: didA } : {}),
+    };
     const effects: RelayEffect[] = [
-      { toClientId: a, message: { type: 'paired', roomId, peerClientId: b } },
-      { toClientId: b, message: { type: 'paired', roomId, peerClientId: a } },
+      { toClientId: a, message: toA },
+      { toClientId: b, message: toB },
     ];
     return { state: freezeState(m), effects };
   }
@@ -147,6 +159,22 @@ export function applyRelayMessage(
   if (msg.type === 'syncSample') {
     const roomId = m.clientRoom.get(senderClientId);
     if (!roomId) {
+      return { state, effects: [] };
+    }
+    const room = m.rooms.get(roomId);
+    if (!room) {
+      return { state, effects: [] };
+    }
+    const peer = room.a === senderClientId ? room.b : room.a;
+    return { state, effects: [{ toClientId: peer, message: msg }] };
+  }
+
+  if (msg.type === 'pvpWire') {
+    if (msg.body.length > 8192) {
+      return { state, effects: [] };
+    }
+    const roomId = m.clientRoom.get(senderClientId);
+    if (!roomId || roomId !== msg.roomId) {
       return { state, effects: [] };
     }
     const room = m.rooms.get(roomId);

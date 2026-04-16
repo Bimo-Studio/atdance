@@ -53,7 +53,12 @@ export class InfoScene extends Phaser.Scene {
     const goBack = (): void => {
       this.scene.start(this.backSceneKey);
     };
-    this.input.once('pointerdown', goBack);
+    this.input.once('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (!pointer.leftButtonDown()) {
+        return;
+      }
+      goBack();
+    });
     this.input.keyboard?.once('keydown-ESC', goBack);
   }
 }

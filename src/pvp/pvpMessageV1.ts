@@ -39,7 +39,40 @@ const probeAck = z
   })
   .strict();
 
-export const pvpMessageV1Schema = z.discriminatedUnion('type', [ping, pong, probe, probeAck]);
+const chartOffer = z
+  .object({
+    type: z.literal('pvp.v1.chartOffer'),
+    chartUrl: z.string().min(1),
+    preferenceRank: z.number().int().min(0).max(99),
+    tieBreakId: z.string().min(1),
+  })
+  .strict();
+
+const chartAck = z
+  .object({
+    type: z.literal('pvp.v1.chartAck'),
+    chartUrl: z.string().min(1),
+  })
+  .strict();
+
+const scoreTick = z
+  .object({
+    type: z.literal('pvp.v1.scoreTick'),
+    combo: z.number().int().min(0),
+    miss: z.number().int().min(0),
+    score: z.number().int().optional(),
+  })
+  .strict();
+
+export const pvpMessageV1Schema = z.discriminatedUnion('type', [
+  ping,
+  pong,
+  probe,
+  probeAck,
+  chartOffer,
+  chartAck,
+  scoreTick,
+]);
 
 export type PvpMessageV1 = z.infer<typeof pvpMessageV1Schema>;
 

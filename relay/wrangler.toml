@@ -6,6 +6,15 @@ compatibility_date = "2025-01-01"
 [vars]
 INVITE_ONLY = "1"
 ATPROTO_ALLOWLIST_DIDS = "did:plc:ya2boguixgy4757qqtw7gwch, did:plc:qdsp7mb3o7irmv7whyjexy7g, did:plc:dzvxvsiy3maw4iarpvizsj67, did:plc:7mnpet2pvof2llhpcwattscf"
+# Browser origins allowed to call relay HTTP (allowlist check + admin API). `*` is dev-friendly; production: comma-separated https://app… URLs.
+ATDANCE_APP_ORIGINS = "*"
+# Admin API + UI: only this handle (default distributed.camp). ATDANCE_ADMIN_HANDLE=distributed.camp
+
+# Live allowlist edits (no redeploy): create a KV namespace, then uncomment:
+# `pnpm exec wrangler kv namespace create ALLOWLIST_KV`
+# [[kv_namespaces]]
+# binding = "ALLOWLIST_KV"
+# id = "<namespace id>"
 
 # Public hostname via a Worker Route (you create the DNS record yourself — see deployment doc).
 # Requires `malldao.xyz` in this Cloudflare account. Remove this block to use only *.workers.dev.

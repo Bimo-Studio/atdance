@@ -17,6 +17,8 @@ const paired = z
     type: z.literal('paired'),
     roomId: z.string().min(1),
     peerClientId: z.string().min(1).optional(),
+    /** Peer's `joinQueue.playerDid` when the relay recorded it (§8.1 / tasks R.2). */
+    peerPlayerDid: z.string().min(1).optional(),
   })
   .strict();
 
@@ -47,6 +49,15 @@ const syncSample = z
   })
   .strict();
 
+/** Opaque PvP payload string (`stringifyPvpMessageV1`); relay forwards between room peers (tasks N.3–N.4). */
+const pvpWire = z
+  .object({
+    type: z.literal('pvpWire'),
+    roomId: z.string().min(1),
+    body: z.string().min(1),
+  })
+  .strict();
+
 const leave = z
   .object({
     type: z.literal('leave'),
@@ -68,6 +79,7 @@ export const syncMessageV1Schema = z.discriminatedUnion('type', [
   ping,
   pong,
   syncSample,
+  pvpWire,
   leave,
   relayError,
 ]);

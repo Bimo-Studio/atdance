@@ -1,7 +1,7 @@
 import type { OAuthSession } from '@atproto/oauth-client-browser';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { canPlay } from '@/auth/authGate';
+import { canPlay, canPlayAsync } from '@/auth/authGate';
 
 function mockSession(sub: string): OAuthSession {
   return { sub } as OAuthSession;
@@ -44,5 +44,44 @@ describe('canPlay', () => {
       VITE_ATPROTO_ALLOWLIST_DIDS: '',
     };
     expect(canPlay(mockSession('did:plc:any'), env)).toBe(false);
+  });
+});
+
+describe('canPlayAsync', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('falls back to env allowlist when relay origin missing', async () => {
+    const env = {
+      VITE_INVITE_ONLY: '1',
+      VITE_ATPROTO_ALLOWLIST_DIDS: 'did:plc:ok',
+      VITE_RELAY_WS: '',
+      VITE_RELAY_HTTP: '',
+    };
+    expect(await canPlayAsync(mockSession('did:plc:ok'), env)).toBe(true);
+    expect(await canPlayAsync(mockSession('did:plc:nope'), env)).toBe(false);
+  });
+
+  it('uses relay check when origin is set', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ allowed: true }),
+      }),
+    );
+    const env = {
+      VITE_INVITE_ONLY: '1',
+      VITE_ATPROTO_ALLOWLIST_DIDS: '',
+      VITE_RELAY_WS: 'wss://relay.test/x',
+      VITE_RELAY_HTTP: '',
+    };
+    expect(await canPlayAsync(mockSession('did:plc:x'), env)).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://relay.test/x/allowlist/v1/check?did=did%3Aplc%3Ax',
+      expect.anything(),
+    );
   });
 });

@@ -22,6 +22,7 @@ export default mergeConfig(
           'src/scenes/**',
           'src/main.ts',
           'relay/src/index.ts',
+          'relay/src/workerEnv.ts',
           'src/types/**',
           'src/play/**',
           'src/game/types.ts',

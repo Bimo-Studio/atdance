@@ -3,24 +3,25 @@ import Phaser from 'phaser';
 import type { EchoDuplex } from '@/p2p/p2pEchoHandshake';
 import { getAtprotoOAuthSession } from '@/auth/atprotoSession';
 import { requirePlaySession } from '@/auth/requirePlaySession';
+import { agreeChartFromOffers, type ChartOfferInput } from '@/pvp/chartAgreement';
 import { agreeStartAtUnixMs } from '@/pvp/agreeStartTime';
 import { shouldUseAudioProof } from '@/pvp/epochUncertainty';
 import { LOBBY_LAYOUT } from '@/pvp/lobbyLayout';
 import { evaluateMatchQuality, rttJitterStdMs } from '@/pvp/matchQuality';
-import { MockPvpRemote } from '@/pvp/mockPvpRemote';
-import { P2PProbeTransport } from '@/pvp/p2pProbeTransport';
 import { nextLobbyState, type PvpLobbyState } from '@/pvp/lobbyState';
 import { loadPeerRttTableForDid, savePeerRttTableForDid } from '@/pvp/peerRttTablePersistence';
 import { PeerRttTable } from '@/pvp/peerRttTable';
 import { isP2PBootstrapConfigured } from '@/pvp/pvpDiscovery';
-import {
-  connectPvpRelayQueue,
-  getPvpRelayWsUrl,
-  type PvpRelayQueueSession,
-} from '@/pvp/pvpRelayQueue';
+import type { PvpMessageV1 } from '@/pvp/pvpMessageV1';
+import { isPvpMatchmakingConfigured } from '@/pvp/pvpMatchmakingEnv';
+import { connectPvpRelaySession, type PvpRelaySession } from '@/pvp/pvpRelaySession';
+import { getPvpRelayWsUrl } from '@/pvp/pvpRelayQueue';
 import { countdownDigitFromRemainingMs } from '@/pvp/pvpCountdown';
 import { syntheticOffsetSamplesFromRttMs } from '@/pvp/probeOffsets';
 import { MockProbeTransport, type ProbeTransport } from '@/pvp/probeTransport';
+import { RelayProbeTransport, tryRespondToPvpProbe } from '@/pvp/relayProbeTransport';
+import { P2PProbeTransport } from '@/pvp/p2pProbeTransport';
+import { loadSongPriority, type SongPriorityState } from '@/pvp/songPriorityStore';
 import {
   isE2eMode,
   isE2ePvpHighRtt,
@@ -29,13 +30,16 @@ import {
 } from '@/util/e2eFlags';
 import { getStorageDid } from '@/util/storageDid';
 
-const STUB_PEER_DID = 'did:web:stub.opponent';
+/** Synthetic peer id for RTT probe when relay did not supply `peerPlayerDid` (solo / dev queue). */
+const PROBE_PEER_DID_FALLBACK = 'did:web:atdance.probe-peer';
+const PVP_DEFAULT_CHART_URL = '/songs/synrg/synrg.dance';
 const PROBE_SAMPLES = 10;
 const COUNTDOWN_LEAD_MS = 4000;
+const CHART_NEGOTIATION_MS = 3000;
 const FALLBACK_OFFSET_STUBS = [12, 13, 12, 14, 11] as const;
 
 /**
- * PvP lobby: side-by-side shell, stub peer, RTT probe gate → ready → countdown → stub play (PRD P2–P3).
+ * PvP lobby: side-by-side shell, RTT probe gate → ready → countdown → shared play scene (PRD P2–P6).
  */
 export class PvpLobbyScene extends Phaser.Scene {
   private lobbyState: PvpLobbyState = 'idle';
@@ -47,7 +51,6 @@ export class PvpLobbyScene extends Phaser.Scene {
   private localMiss = 0;
   private remoteCombo = 0;
   private remoteMiss = 0;
-  private mockRemote!: MockPvpRemote;
   private playTimers: Phaser.Time.TimerEvent[] = [];
   private countdownLabel: Phaser.GameObjects.Text | null = null;
   private peerRttTable!: PeerRttTable;
@@ -62,8 +65,16 @@ export class PvpLobbyScene extends Phaser.Scene {
   private lastProbeRttSamples: readonly number[] = [];
   private pairingResolved = false;
   private stubPairTimer: Phaser.Time.TimerEvent | null = null;
-  private relayQueue: PvpRelayQueueSession | null = null;
+  private relaySession: PvpRelaySession | null = null;
   private relayClientId = '';
+  private peerPlayerDid: string | null = null;
+  private opponentTitleText!: Phaser.GameObjects.Text;
+  private songPriority!: SongPriorityState;
+  private localChartOffer: ChartOfferInput | null = null;
+  private peerChartOffer: ChartOfferInput | null = null;
+  private agreedChartUrl = '';
+  /** When true, lobby hands off to PlayScene and must not close the relay socket. */
+  private leavingForPvpPlay = false;
 
   constructor() {
     super({ key: 'PvpLobbyScene' });
@@ -74,17 +85,22 @@ export class PvpLobbyScene extends Phaser.Scene {
       return;
     }
 
+    this.leavingForPvpPlay = false;
     const session = getAtprotoOAuthSession();
     this.storageDid =
       getStorageDid() || (session?.sub?.startsWith('did:') ? session.sub : 'did:web:unknown.local');
     this.peerRttTable = new PeerRttTable();
-    this.mockRemote = new MockPvpRemote(this);
 
     void this.bootstrapLobby();
   }
 
   private async bootstrapLobby(): Promise<void> {
-    this.peerRttTable = await loadPeerRttTableForDid(this.storageDid, Date.now());
+    const [loadedRtt, priority] = await Promise.all([
+      loadPeerRttTableForDid(this.storageDid, Date.now()),
+      loadSongPriority(this.storageDid),
+    ]);
+    this.peerRttTable = loadedRtt;
+    this.songPriority = priority;
 
     this.applyLobbyTransition('enter_queue');
 
@@ -136,8 +152,8 @@ export class PvpLobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.add
-      .text(half + half / 2, 120, 'Opponent (stub)', {
+    this.opponentTitleText = this.add
+      .text(half + half / 2, 120, 'Opponent', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '16px',
         color: `#${LOBBY_LAYOUT.remoteStroke.toString(16)}`,
@@ -208,11 +224,14 @@ export class PvpLobbyScene extends Phaser.Scene {
         : `pvp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const relayUrl = getPvpRelayWsUrl();
     if (relayUrl !== '') {
-      this.relayQueue = connectPvpRelayQueue({
+      this.relaySession = connectPvpRelaySession({
         relayWsUrl: relayUrl,
         clientId: this.relayClientId,
         playerDid: this.storageDid,
-        onPaired: () => {
+        onPaired: (msg) => {
+          const d = msg.peerPlayerDid?.trim();
+          this.peerPlayerDid = d !== undefined && d.length > 0 ? d : null;
+          this.refreshOpponentTitle();
           this.tryBeginPairingFromRelay();
         },
         onError: (code) => {
@@ -223,24 +242,53 @@ export class PvpLobbyScene extends Phaser.Scene {
       });
     }
 
-    this.stubPairTimer = this.time.delayedCall(120, () => {
-      this.tryBeginPairingFromStub();
-    });
+    if (!isPvpMatchmakingConfigured()) {
+      this.statusNote =
+        '— Matchmaking unavailable: configure VITE_RELAY_WS and run the relay, set VITE_PVP_P2P_PROBE or VITE_P2P_BOOTSTRAP, or play solo from Song Select (see docs/deployment-shoestring.md).';
+      this.refreshHud();
+    } else {
+      this.stubPairTimer = this.time.delayedCall(120, () => {
+        this.tryBeginPairingFromStub();
+      });
+    }
 
     this.input.keyboard?.on('keydown-SPACE', this.onSpace, this);
     this.input.keyboard?.once('keydown-ESC', () => {
       this.cleanupTimers();
+      this.relaySession?.close();
+      this.relaySession = null;
       this.scene.start('TitleScene');
     });
 
     this.events.once('shutdown', () => {
       this.input.keyboard?.off('keydown-SPACE', this.onSpace, this);
       this.cleanupTimers();
-      this.relayQueue?.close();
-      this.relayQueue = null;
+      if (!this.leavingForPvpPlay) {
+        this.relaySession?.close();
+      }
+      this.relaySession = null;
       this.countdownLabel?.destroy();
       this.countdownLabel = null;
     });
+  }
+
+  private buildLocalChartOffer(): ChartOfferInput {
+    for (let i = 0; i < 3; i += 1) {
+      const slot = this.songPriority.slots[i];
+      const url = slot?.chartUrl?.trim();
+      if (url !== undefined && url.length > 0) {
+        return {
+          chartUrl: url,
+          preferenceRank: i,
+          tieBreakId: this.relayClientId,
+        };
+      }
+    }
+    return {
+      chartUrl: PVP_DEFAULT_CHART_URL,
+      preferenceRank: 99,
+      tieBreakId: this.relayClientId,
+    };
   }
 
   private tryBeginPairingFromRelay(): void {
@@ -252,8 +300,6 @@ export class PvpLobbyScene extends Phaser.Scene {
       this.stubPairTimer.destroy();
       this.stubPairTimer = null;
     }
-    this.relayQueue?.close();
-    this.relayQueue = null;
     if (import.meta.env.DEV) {
       console.debug('[PvP] paired via relay queue');
     }
@@ -266,8 +312,10 @@ export class PvpLobbyScene extends Phaser.Scene {
     }
     this.pairingResolved = true;
     this.stubPairTimer = null;
-    this.relayQueue?.close();
-    this.relayQueue = null;
+    this.relaySession?.close();
+    this.relaySession = null;
+    this.peerPlayerDid = null;
+    this.refreshOpponentTitle();
     this.beginStubPairing();
   }
 
@@ -289,7 +337,99 @@ export class PvpLobbyScene extends Phaser.Scene {
       }
       console.warn('[PvP] VITE_PVP_P2P_PROBE is set but no duplex — using mock RTT');
     }
+    const rId = this.relaySession?.getRoomId();
+    if (this.relaySession !== null && rId !== null && rId !== '') {
+      return new RelayProbeTransport(this.relaySession);
+    }
     return new MockProbeTransport({ fixedMs: 85 });
+  }
+
+  private probeTargetDid(): string {
+    const d = this.peerPlayerDid?.trim();
+    if (d !== undefined && d.length > 0 && d.startsWith('did:')) {
+      return d;
+    }
+    return PROBE_PEER_DID_FALLBACK;
+  }
+
+  private refreshOpponentTitle(): void {
+    const d = this.peerPlayerDid?.trim();
+    if (d !== undefined && d.length > 0) {
+      const short = d.length > 40 ? `${d.slice(0, 32)}…` : d;
+      this.opponentTitleText.setText(`Opponent · ${short}`);
+    } else {
+      this.opponentTitleText.setText('Opponent (local match)');
+    }
+  }
+
+  private startChartNegotiation(): void {
+    const local = this.buildLocalChartOffer();
+    this.localChartOffer = local;
+    this.peerChartOffer = null;
+    this.agreedChartUrl = '';
+
+    const roomId = this.relaySession?.getRoomId();
+    if (this.relaySession !== null && roomId !== null && roomId !== '') {
+      const session = this.relaySession;
+      this.relaySession.setOnPvpMessage((m) => {
+        if (tryRespondToPvpProbe(session, m)) {
+          return;
+        }
+        this.onLobbyPvpMessage(m);
+      });
+      this.relaySession.sendPvp({
+        type: 'pvp.v1.chartOffer',
+        chartUrl: local.chartUrl,
+        preferenceRank: local.preferenceRank,
+        tieBreakId: local.tieBreakId,
+      });
+      const t = this.time.delayedCall(CHART_NEGOTIATION_MS, () => {
+        this.finalizeChartNegotiation(true);
+      });
+      this.playTimers.push(t);
+    } else {
+      this.finalizeChartNegotiation(false);
+    }
+  }
+
+  private onLobbyPvpMessage(msg: PvpMessageV1): void {
+    if (msg.type !== 'pvp.v1.chartOffer') {
+      return;
+    }
+    if (this.agreedChartUrl !== '') {
+      return;
+    }
+    this.peerChartOffer = {
+      chartUrl: msg.chartUrl,
+      preferenceRank: msg.preferenceRank,
+      tieBreakId: msg.tieBreakId,
+    };
+    if (this.localChartOffer !== null) {
+      this.agreedChartUrl = agreeChartFromOffers(
+        this.localChartOffer,
+        this.peerChartOffer,
+      ).chartUrl;
+      this.relaySession?.sendPvp({ type: 'pvp.v1.chartAck', chartUrl: this.agreedChartUrl });
+      this.refreshHud();
+    }
+  }
+
+  private finalizeChartNegotiation(timedOut: boolean): void {
+    if (this.agreedChartUrl !== '') {
+      return;
+    }
+    if (this.localChartOffer !== null && this.peerChartOffer !== null) {
+      this.agreedChartUrl = agreeChartFromOffers(
+        this.localChartOffer,
+        this.peerChartOffer,
+      ).chartUrl;
+    } else if (timedOut && this.relaySession?.getRoomId()) {
+      this.agreedChartUrl = PVP_DEFAULT_CHART_URL;
+      this.statusNote = '— chart: default (negotiation timeout)';
+    } else {
+      this.agreedChartUrl = this.localChartOffer?.chartUrl ?? PVP_DEFAULT_CHART_URL;
+    }
+    this.refreshHud();
   }
 
   private async runProbePhase(): Promise<void> {
@@ -297,8 +437,9 @@ export class PvpLobbyScene extends Phaser.Scene {
       setE2ePvpLobbyPhase('probing');
     }
     const transport = this.resolveProbeTransport();
+    const probeDid = this.probeTargetDid();
     try {
-      const samples = await transport.collectRttSamples(STUB_PEER_DID, PROBE_SAMPLES);
+      const samples = await transport.collectRttSamples(probeDid, PROBE_SAMPLES);
       const mq = evaluateMatchQuality(samples);
       if (isE2eMode()) {
         setE2ePvpProbeOutcome(mq.accept ? 'accept' : 'reject', this.probeRound);
@@ -317,12 +458,13 @@ export class PvpLobbyScene extends Phaser.Scene {
 
       const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
       const jitter = rttJitterStdMs(samples);
-      this.peerRttTable.recordSample(STUB_PEER_DID, mean, jitter, Date.now());
+      this.peerRttTable.recordSample(probeDid, mean, jitter, Date.now());
       void savePeerRttTableForDid(this.storageDid, this.peerRttTable);
       this.lastProbeRttSamples = samples;
 
       this.applyLobbyTransition('probe_done');
       this.refreshHud();
+      this.startChartNegotiation();
     } catch (e) {
       console.error('[PvP] probe failed', e);
       this.statusNote = '— probe error, retrying…';
@@ -339,7 +481,7 @@ export class PvpLobbyScene extends Phaser.Scene {
     if (this.lobbyState === 'lobby' && !this.localReady) {
       this.localReady = true;
       this.refreshHud();
-      this.mockRemote.scheduleRemoteReady(450, () => {
+      this.time.delayedCall(450, () => {
         this.applyLobbyTransition('both_ready');
         this.startCountdown();
       });
@@ -365,6 +507,7 @@ export class PvpLobbyScene extends Phaser.Scene {
       console.debug('[PvP] countdown', {
         clockSyncMode: this.clockSyncMode,
         agreedStartAtUnixMs: this.agreedStartAtUnixMs,
+        chartUrl: this.agreedChartUrl,
       });
     }
     if (isE2eMode()) {
@@ -398,40 +541,62 @@ export class PvpLobbyScene extends Phaser.Scene {
           label?.destroy();
           this.countdownLabel = null;
           this.applyLobbyTransition('countdown_end');
-          this.beginStubPlay();
+          this.startPlaySceneAfterCountdown();
         }
       },
     });
     this.playTimers.push(tick);
   }
 
-  private beginStubPlay(): void {
+  private startPlaySceneAfterCountdown(): void {
     if (isE2eMode()) {
       setE2ePvpLobbyPhase('play');
     }
-    this.localCombo = 0;
-    this.localMiss = 0;
-    this.remoteCombo = 0;
-    this.remoteMiss = 0;
 
-    const localEv = this.time.addEvent({
-      delay: 400,
-      loop: true,
-      callback: () => {
-        this.localCombo += 1;
-        this.localMiss = Math.floor(this.localCombo / 8);
-        this.refreshHud();
+    const chartUrl = this.agreedChartUrl !== '' ? this.agreedChartUrl : PVP_DEFAULT_CHART_URL;
+    const relay = this.relaySession;
+    const remoteHudRef = relay !== null ? { combo: 0, miss: 0, score: 0 } : undefined;
+
+    if (relay !== null) {
+      relay.setOnPvpMessage((msg) => {
+        if (tryRespondToPvpProbe(relay, msg)) {
+          return;
+        }
+        if (msg.type !== 'pvp.v1.scoreTick' || remoteHudRef === undefined) {
+          return;
+        }
+        remoteHudRef.combo = msg.combo;
+        remoteHudRef.miss = msg.miss;
+        remoteHudRef.score = msg.score ?? 0;
+      });
+    }
+
+    const sendPvp =
+      relay !== null
+        ? (m: PvpMessageV1) => {
+            relay.sendPvp(m);
+          }
+        : undefined;
+    const closeRelay =
+      relay !== null
+        ? () => {
+            relay.close();
+          }
+        : undefined;
+
+    this.leavingForPvpPlay = true;
+    this.relaySession = null;
+    this.cleanupTimers();
+    this.scene.start('PlayScene', {
+      chartUrl,
+      pvp: {
+        agreedStartAtUnixMs: this.agreedStartAtUnixMs,
+        autoStartAudio: true,
+        sendPvp,
+        remoteHudRef,
+        closeRelay,
       },
     });
-    this.playTimers.push(localEv);
-
-    this.mockRemote.startScoreLoop(({ combo, miss }) => {
-      this.remoteCombo = combo;
-      this.remoteMiss = miss;
-      this.refreshHud();
-    });
-
-    this.refreshHud();
   }
 
   private cleanupTimers(): void {
@@ -443,7 +608,6 @@ export class PvpLobbyScene extends Phaser.Scene {
       t.destroy();
     }
     this.playTimers = [];
-    this.mockRemote.destroy();
   }
 
   private refreshHud(): void {
@@ -451,8 +615,10 @@ export class PvpLobbyScene extends Phaser.Scene {
     if (this.lobbyState === 'lobby' && this.localReady) {
       extra = ' — you ready, waiting for opponent…';
     }
+    const chartHint =
+      this.agreedChartUrl !== '' ? `  ·  chart: ${this.shortChartLabel(this.agreedChartUrl)}` : '';
     const note = this.statusNote ? ` ${this.statusNote}` : '';
-    this.status.setText(`State: ${this.lobbyState}${extra}${note}`);
+    this.status.setText(`State: ${this.lobbyState}${extra}${chartHint}${note}`);
     this.localHud.setText(`combo ${this.localCombo}  ·  miss ${this.localMiss}`);
     this.remoteHud.setText(`combo ${this.remoteCombo}  ·  miss ${this.remoteMiss}`);
     if (!isE2eMode()) {
@@ -469,5 +635,10 @@ export class PvpLobbyScene extends Phaser.Scene {
     } else if (this.lobbyState === 'end') {
       setE2ePvpLobbyPhase('end');
     }
+  }
+
+  private shortChartLabel(chartUrl: string): string {
+    const m = /\/songs\/([^/]+)\//.exec(chartUrl);
+    return m?.[1] ?? chartUrl.slice(0, 24);
   }
 }

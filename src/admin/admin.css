@@ -1,0 +1,138 @@
+:root {
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: #0a0a12;
+  color: #e8e8f0;
+  line-height: 1.45;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+}
+
+#root {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.al-muted {
+  color: #8899aa;
+  font-size: 14px;
+}
+
+.al-signin-feedback {
+  margin: 0 0 12px;
+  min-height: 1.2em;
+}
+
+.al-signin-feedback--warn {
+  color: #e8b4a0;
+}
+
+.al-card {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(18, 18, 28, 0.95);
+  border: 1px solid #334455;
+  border-radius: 8px;
+}
+
+.al-error {
+  border-color: #663344;
+}
+
+.al-shell {
+  margin-top: 20px;
+}
+
+.al-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.al-input {
+  flex: 1;
+  min-width: 220px;
+  padding: 8px 10px;
+  background: #1a1a24;
+  border: 1px solid #445566;
+  border-radius: 4px;
+  color: #e8e8f0;
+}
+
+.al-btn {
+  padding: 8px 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid #556677;
+  background: #2a2a36;
+  color: #e8e8f0;
+}
+
+.al-btn--primary {
+  background: #2a3f55;
+  border-color: #4a6a88;
+}
+
+.al-btn--danger {
+  background: #4a2230;
+  border-color: #884455;
+}
+
+.al-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.al-table th,
+.al-table td {
+  border-bottom: 1px solid #2a2a38;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.al-mono {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.al-row {
+  cursor: pointer;
+}
+
+.al-row:hover {
+  background: rgba(40, 50, 70, 0.35);
+}
+
+.al-row--selected {
+  background: rgba(60, 90, 120, 0.45);
+}
+
+.al-suggest {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.al-suggest-item {
+  text-align: left;
+  padding: 6px 8px;
+  background: #1a1a24;
+  border: 1px solid #445566;
+  border-radius: 4px;
+  color: #ccddee;
+  cursor: pointer;
+}
+
+.al-suggest-item:hover {
+  background: #242434;
+}

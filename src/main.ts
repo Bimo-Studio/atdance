@@ -28,38 +28,57 @@ import { SongPrefsScene } from '@/scenes/SongPrefsScene';
 import { SongSelectScene } from '@/scenes/SongSelectScene';
 import { SyncLabScene } from '@/scenes/SyncLabScene';
 import { TitleScene } from '@/scenes/TitleScene';
+import { loopbackUrlFromLocalhost } from '@/util/loopbackDevRedirect';
 
 if (import.meta.env.VITE_INVITE_ONLY === '1') {
   document.documentElement.setAttribute('data-invite-only', '1');
 }
 
-const parent = document.getElementById('game-root');
-if (!parent) {
-  throw new Error('Missing #game-root');
+/**
+ * ATProto OAuth client normalizes loopback to `127.0.0.1` during `init()`; doing that
+ * after Phaser boots looks like a broken tab (flash + HMR disconnect). Redirect first.
+ */
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  const next = loopbackUrlFromLocalhost(window.location.href);
+  if (next !== null) {
+    window.location.replace(next);
+  } else {
+    startPhaserGame();
+  }
+} else {
+  startPhaserGame();
 }
 
-void new Phaser.Game({
-  type: Phaser.AUTO,
-  parent,
-  width: 960,
-  height: 540,
-  backgroundColor: '#0a0a12',
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-  },
-  scene: [
-    BootScene,
-    SignInScene,
-    TitleScene,
-    SongPrefsScene,
-    MagnetLibraryScene,
-    PvpLobbyScene,
-    SongSelectScene,
-    InfoScene,
-    PlayScene,
-    ResultsScene,
-    CalibrationScene,
-    SyncLabScene,
-  ],
-});
+function startPhaserGame(): void {
+  const parent = document.getElementById('game-root');
+  if (!parent) {
+    throw new Error('Missing #game-root');
+  }
+
+  void new Phaser.Game({
+    type: Phaser.AUTO,
+    parent,
+    width: 960,
+    height: 540,
+    disableContextMenu: false,
+    backgroundColor: '#0a0a12',
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
+    scene: [
+      BootScene,
+      SignInScene,
+      TitleScene,
+      SongPrefsScene,
+      MagnetLibraryScene,
+      PvpLobbyScene,
+      SongSelectScene,
+      InfoScene,
+      PlayScene,
+      ResultsScene,
+      CalibrationScene,
+      SyncLabScene,
+    ],
+  });
+}

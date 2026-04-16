@@ -8,8 +8,8 @@ vi.mock('@/auth/atprotoSession', () => ({
   getAtprotoOAuthSession: vi.fn(),
 }));
 
-vi.mock('@/util/e2eFlags', () => ({
-  isE2eMode: () => false,
+vi.mock('@/auth/devAuthBypass', () => ({
+  skipAuthGate: vi.fn(() => false),
 }));
 
 describe('requirePlaySession', () => {

@@ -5,6 +5,7 @@ import { defineConfig, type Plugin } from 'vite';
 
 import { oauthClientMetadataObject } from './src/auth/oauthClientMetadata';
 import { resolveBuildGitSha } from './src/build/resolveBuildGitSha';
+import { viteAdminIndexRewrite } from './src/build/viteAdminIndexRewrite';
 
 function tryGitRevShort(): string | undefined {
   try {
@@ -33,6 +34,27 @@ function deploymentSiteUrl(): string | undefined {
   return undefined;
 }
 
+/**
+ * Dev-only: match production `vercel.json` rewrites so `/admin` serves `admin/index.html`.
+ * Without this, Vite's SPA fallback serves the root `index.html` (main Phaser app) for `/admin`.
+ */
+function adminRouteDevPlugin(): Plugin {
+  return {
+    name: 'atdance-admin-route-dev',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.url !== undefined) {
+          const nextUrl = viteAdminIndexRewrite(req.url);
+          if (nextUrl !== req.url) {
+            req.url = nextUrl;
+          }
+        }
+        next();
+      });
+    },
+  };
+}
+
 function oauthClientMetadataPlugin(): Plugin {
   return {
     name: 'atdance-oauth-client-metadata',
@@ -58,6 +80,14 @@ const webtorrentBrowser = fileURLToPath(
 );
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('index.html', import.meta.url)),
+        admin: fileURLToPath(new URL('admin/index.html', import.meta.url)),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -70,6 +100,7 @@ export default defineConfig({
     __APP_GIT_SHA__: JSON.stringify(buildGitSha),
   },
   plugins: [
+    adminRouteDevPlugin(),
     oauthClientMetadataPlugin(),
     {
       name: 'atdance-index-git-flowerbox',
@@ -91,7 +122,9 @@ export default defineConfig({
     exclude: ['webtorrent'],
   },
   server: {
-    port: 5173,
+    /** IPv4 loopback so `curl http://127.0.0.1:<port>` and ATProto OAuth callbacks match `redirect_uri`. */
+    host: true,
+    port: 5174,
     strictPort: true,
   },
 });

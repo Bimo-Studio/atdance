@@ -78,6 +78,17 @@ export function setE2ePvpLobbyPhase(
   }
 }
 
+/** PvP play layout when `PlayScene` uses split playfield (`#e2e-pvp-play` `data-layout`). */
+export function setE2ePvpPlayLayout(layout: 'solo' | 'split'): void {
+  if (!isE2eMode()) {
+    return;
+  }
+  const el = document.getElementById('e2e-pvp-play');
+  if (el) {
+    el.setAttribute('data-layout', layout);
+  }
+}
+
 /** Last probe gate outcome for Playwright (`#e2e-pvp-probe`). */
 export function setE2ePvpProbeOutcome(result: 'accept' | 'reject', requeueCount: number): void {
   if (!isE2eMode()) {

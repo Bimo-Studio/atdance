@@ -1,277 +1,402 @@
 # Process: feature / initiative delivery (research → PRD → todos → implementation)
 
-**Authority:** When the user says **“use the process”**, **“follow the delivery process”**, or **“use the process document”**, they mean **this file**: `docs/process-feature-delivery.md`. Agents and humans **must** follow it for work that introduces **new product behavior**, **new subsystems**, **multi-file / multi-session scope**, or **anything that would normally warrant a PRD**. Small, isolated fixes (one function, typo, single test) may skip phases 1–5 **only** if they do not change contracts, user-visible behavior, or architecture; when in doubt, **use the full process**.
+## Authority
 
-**Goals**
+When the user says “use the process”, “follow the delivery process”, or “use the process document”, they mean this file: `docs/process-feature-delivery.md`.
 
-1. **Nothing important lives only in chat** — research, plans, PRDs, and todos are **files in the repo**.
-2. **No implementation before written todos** — avoids half-baked delivery and “forgot what we agreed” drift across LLM sessions.
-3. **TDD + BDD + coverage** are **non-negotiable** for deliverables under this process (see §7).
-4. **Unknown-unknowns** are explicitly surfaced to the stakeholder **before** coding.
+This process is normative and binding. Any deviation invalidates completion claims.
+
+---
+
+## Core invariants (non-negotiable)
+
+1. Nothing important lives only in chat — all artifacts must exist in the repo.
+2. No implementation before written todos.
+3. TDD + BDD + coverage are mandatory.
+4. Zero-stub invariant must hold at all completion boundaries.
+5. All completion claims require verifiable evidence.
+
+---
+
+## Stub definition (normative)
+
+A stub is any code path that:
+
+- Returns hardcoded or placeholder data not derived from real inputs
+- Contains TODO, FIXME, or TBD markers
+- Throws “not implemented” or equivalent
+- Skips required side effects defined in the PRD
+- Mocks or bypasses integrations in non-test code
+- Implements only interfaces or types without real behavior
+
+### Allowed use
+
+- Temporary decomposition within a single task only
+
+### Forbidden
+
+- Any completed task
+- Any merged code
+- Any Definition of Done claim
 
 ---
 
 ## 0. Applicability checklist
 
-Use the **full** process when **any** of these is true:
+Use full process if any:
 
-- [ ] New user-facing flows, settings, or game modes.
-- [ ] New network protocols, sync semantics, or persistence formats.
-- [ ] New dependencies with integration surface (OAuth, WebRTC, Workers, etc.).
-- [ ] Work expected to take **more than one** implementation session or PR.
-- [ ] The user invoked this process by name.
-
-You may use a **lightweight** path (research + short plan only, no PRD) only if the user explicitly agrees in writing (in the plan file or issue).
+- New user-facing behavior
+- New system or subsystem
+- Multi-session work
+- New dependencies
+- User invokes process
 
 ---
 
 ## 1. Research phase (mandatory)
 
-### 1.1 What to do
+Artifact: `docs/research/<slug>.md`
 
-Before proposing solutions, **actively research**:
+Required contents:
 
-- **In-repo:** related PRDs (`docs/prd-*.md`), architecture docs, existing modules, tests, relay/worker code, env patterns.
-- **Upstream / ecosystem:** official docs for libraries (Vite, Phaser, ATProto, Cloudflare Workers, etc.), RFCs, security notes, known limitations.
-- **Comparable solutions:** prior art (e.g. similar games, sync strategies, OAuth patterns); cite links and tradeoffs.
-
-Do **not** rely on memory from earlier chat turns. **Re-read** files in the workspace when relevant.
-
-### 1.2 Artifact: research file
-
-- **Create a new file** in **`docs/research/`** (create the directory if missing).
-- **Naming:** `docs/research/<short-task-slug>.md`  
-  Examples: `docs/research/pvp-matchmaking.md`, `docs/research/oauth-streamplace-alignment.md`.
-- If multiple related spikes exist, use suffixes: `pvp-matchmaking-02-webrtc.md`.
-
-### 1.3 Minimum contents of the research file (be exhaustive)
-
-1. **Problem restatement** — one paragraph in your own words.
-2. **Constraints** — from user, repo, platform (browser, Worker limits, etc.).
-3. **Options considered** — table: option | pros | cons | fit for ATDance.
-4. **References** — bullet list with **full URLs** and short notes (what you took from each).
-5. **In-repo pointers** — file paths and one-line roles.
-6. **Risks & open technical questions** — security, privacy, performance, testability.
-7. **Recommendation** — which option(s) to pursue in planning, with rationale.
-
-**Length:** Prefer **over-complete** to under-complete. This file is cheap; rediscovering context is expensive.
+- Problem restatement
+- Constraints
+- Options with tradeoffs
+- References (URLs)
+- In-repo pointers
+- Risks
+- Recommendation
 
 ---
 
 ## 2. Planning phase (mandatory)
 
-### 2.1 Consume research
+Artifact: `docs/plans/<slug>-plan.md`
 
-Read your own **`docs/research/<slug>.md`** end-to-end. Update it if you discover gaps while planning (same PR or follow-up commit; note **“Update YYYY-MM-DD”** at the bottom).
+Required contents:
 
-### 2.2 Artifact: plan file
+- Objective
+- Non-goals
+- Dependencies
+- Architecture
+- File-level changes
+- Testing strategy
+- Rollout
+- Observability
+- Risks
 
-- **Create:** `docs/plans/<short-task-slug>-plan.md`  
-  Match the research slug where possible: research `pvp-matchmaking.md` → plan `pvp-matchmaking-plan.md`.
+Required sections:
 
-### 2.3 Minimum contents of the plan file (be exceedingly detailed)
+- Clarifying questions
+- Unknown-unknowns
 
-1. **Objective** — measurable outcome.
-2. **Non-goals** — explicit exclusions.
-3. **Dependencies** — other tasks, env vars, infra, feature flags.
-4. **Architecture / approach** — components, data flow, failure modes. Diagrams (mermaid or ASCII) encouraged.
-5. **File-level touch list** — expected new/changed paths (best guess; OK to revise).
-6. **Testing strategy** — unit (Vitest), integration, Playwright (BDD), coverage expectations, what is hard to test and how you’ll mitigate.
-7. **Rollout** — flags, migrations, backward compatibility.
-8. **Observability & ops** — logs, metrics, dashboards, runbooks if applicable.
-9. **Risks & mitigations** — ranked.
-10. **Estimated phases** — rough ordering (not the final todo list yet).
-
-### 2.4 Clarifying questions (mandatory section)
-
-At the **bottom** of the plan file, add:
-
-```markdown
-## Clarifying questions (for stakeholder review)
-
-1. ...
-2. ...
-
-## Unknown-unknowns — did you consider?
-
-- **Security / abuse:** ...
-- **Privacy / compliance:** ...
-- **Operational cost:** ...
-- **Accessibility / UX edge cases:** ...
-- **Backward compatibility / migrations:** ...
-- **Failure modes / degraded behavior:** ...
-```
-
-**Stop** after writing the plan and questions. **Ask the stakeholder explicitly:** _“Please review the plan and answer the clarifying questions. I will revise the plan based on your feedback and record revisions in this file.”_
-
-### 2.5 Revision loop
-
-When feedback arrives:
-
-- Append a **`## Revision history`** section with date, summary of change, and reason.
-- Update the body of the plan so it stays **one coherent current story** (or clearly mark superseded sections).
-
-Repeat until the stakeholder **approves** the plan in writing (comment in PR, issue, or explicit chat message). Paste or summarize approval into the plan file under **`## Approval`** with **date** and **approver**.
-
-**Do not write the PRD until approval** (next section).
+Stop and request stakeholder approval.
 
 ---
 
-## 3. PRD phase (after plan approval only)
+## 3. PRD phase
 
-### 3.1 Artifact
+Artifact: `docs/prd-<slug>.md`
 
-- **Create or replace:** `docs/prd-<feature-slug>.md`  
-  Align slug with research/plan where possible.
+Requirements:
 
-### 3.2 PRD quality bar
+- Fully technical
+- Explicit behaviors
+- Edge cases defined
 
-The PRD must be:
+### Integration classification (required)
 
-- **Technical** — protocols, types, env vars, error codes, idempotency, versioning.
-- **Specific** — no hand-wavy “handle errors”; name behaviors.
-- **Thorough** — goals, non-goals, user stories, edge cases, out-of-scope, dependencies, test strategy pointer, observability, rollout.
+| Integration | Type                   | Notes       |
+| ----------- | ---------------------- | ----------- |
+| Example     | REAL / MOCKED / HYBRID | Description |
 
-If during PRD writing you discover gaps, **update the PRD** and, if needed, **loop back** to a short plan addendum (documented in `docs/plans/…` revision history).
+Rules:
 
-### 3.3 Cross-links
-
-- Link **from** PRD **to** research: `See docs/research/<slug>.md`.
-- Link **from** PRD **to** approved plan: `See docs/plans/<slug>-plan.md`.
+- REAL → must execute in tests
+- MOCKED → allowed
+- HYBRID → must define boundary
 
 ---
 
-## 4. Todo decomposition (mandatory; before any implementation)
+## 4. Todo decomposition (mandatory)
 
-### 4.1 Artifact
+Artifact: `docs/tasks-<slug>.md`
 
-- **Create or replace:** `docs/tasks-<feature-slug>.md`  
-  (Example: `docs/tasks-pvp-matchmaking.md`.)
+Hard rules:
 
-This file is the **execution runway** for LLM sessions that reset. **Checkbox granularity:** each item must fit **one context window** (one focused implementation pass: design + code + tests for that slice, or a test-only slice). If an item is too big, **split it** (e.g. `P3.3a`, `P3.3b`) until each row is small enough.
+- No implementation before todos
+- No stubbed completion
+- Checkbox equals tests plus evidence
+- Tasks must fit one context window
 
-### 4.2 Mandatory sections in every tasks file
+### Stub fallback rule
 
-1. **Purpose & update rules** — future agents must update this file when tasks complete.
-2. **Handoff block** — last updated, next task, blockers, notes (see template below).
-3. **Global gates** — every milestone:
-   - `pnpm lint`
-   - `pnpm test` (100% pass)
-   - `pnpm test:coverage` (must satisfy thresholds in `vitest.config.ts`, typically **≥ 50%** lines/statements on included globs)
-4. **Phased checkboxes** — ordered; dependencies first.
-5. **TDD / BDD rows** — explicit; not optional fluff:
-   - **TDD:** Vitest for pure logic; failing test before or with minimal implementation.
-   - **BDD:** Playwright (or project-agreed E2E) for user-visible flows where applicable.
-6. **Appendix** — “landed vs open” snapshot optional but recommended.
-7. **Release-please commit message (final row)** — see §4.5. **Must** be the **last** checkbox in the file; see §4.3.
+If a task cannot be completed fully:
 
-### 4.3 Hard rules for todos
+1. Stop
+2. Do not stub
+3. Split task into smaller tasks
+4. Resume
 
-| Rule                                    | Detail                                                                                                                                                                                                                                                   |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No implementation until todos exist** | Do not open implementation PRs until `docs/tasks-<slug>.md` is written end-to-end for the approved PRD scope.                                                                                                                                            |
-| **No partial completion**               | “Stub” or “later” in production paths is **not** done unless PRD explicitly calls a **phased** release **and** the same is reflected in todos with a **later** phase.                                                                                    |
-| **Checkbox = tests green**              | Do not check a box until **`pnpm test`** passes for that slice and **`pnpm lint`** is clean.                                                                                                                                                             |
-| **Coverage**                            | **`pnpm test:coverage`** must meet repo thresholds before the **milestone** or **project** is marked complete.                                                                                                                                           |
-| **Multiple passes**                     | It is OK to add rows in **second/third passes** when detail emerges; update the PRD when new scope appears.                                                                                                                                              |
-| **Release-please message last**         | The **final** checkbox in `docs/tasks-<slug>.md` is always **§4.5 `RP.1`**. **Do not** check `RP.1` until **every other** checkbox in that file is **`[x]`** (including milestone gates and final acceptance). **Do not** add any task row below `RP.1`. |
+---
 
-### 4.5 Final task: release-please commit message (mandatory)
+## Required sections in tasks file
 
-Every `docs/tasks-<slug>.md` **must** end with **exactly one** closing row after all implementation, acceptance, and documentation tasks:
+### Handoff block
 
-| ID       | Task                                                                                                                                                                                                                                                                                                                                                                | Notes                                                                                                                                                                                |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **RP.1** | **Draft the [Conventional Commits](https://www.conventionalcommits.org/) title and body** suitable for **release-please** (and this repo’s commit / squash conventions). Summarize the shipped change set: **what** changed, **why**, and **scope** (`feat`, `fix`, `docs`, etc.). Paste into the **merge commit** or **PR description** as your workflow requires. | Checked only when the initiative is otherwise complete: **all** prior boxes in this file are `[x]`, and **`pnpm lint && pnpm test && pnpm test:coverage`** pass on the merge target. |
+| Field                  | Value      |
+| ---------------------- | ---------- |
+| Last updated           | YYYY-MM-DD |
+| Branch / PR            |            |
+| Next row to pick       |            |
+| Blockers               |            |
+| Notes for next session |            |
 
-**Placement:** Put **`RP.1`** **after** “Final acceptance,” **definition-of-done** checklists, and **milestone** rows for the initiative — it is the **last task checkbox** in the file. An optional **Appendix** or “How to use” section with **no** `[ ]` rows may follow **`RP.1`** at the very end.
+---
 
-**Rules**
+### Global gates
 
-1. **`RP.1` is always the last task checkbox** — no `[ ]` rows below **`RP.1`**. If you need more work, **uncheck** the relevant earlier row, add new rows **above** `RP.1`, complete them, then return to `RP.1`.
-2. **No skipping** — drafting the message in a scratch buffer early is fine, but the **`[x]`** on `RP.1` is only set when the rest of the list is done.
-3. **If the initiative is abandoned or split** — remove or rewrite `RP.1` in the same edit that narrows scope; do not leave a stale message task.
+- pnpm lint
+- pnpm test
+- pnpm test:coverage
+- Stub scan must return zero results
 
-### 4.6 Handoff template (copy into every `docs/tasks-*.md`)
+---
 
-```markdown
-## Handoff block (update when you stop)
+### Stub scan (mandatory)
 
-| Field                      | Value             |
-| -------------------------- | ----------------- |
-| **Last updated**           | YYYY-MM-DD        |
-| **Branch / PR**            |                   |
-| **Next row to pick**       | (first unchecked) |
-| **Blockers**               |                   |
-| **Notes for next session** |                   |
+Example command:
+
 ```
+grep -R "TODO\|FIXME\|TBD\|not implemented" src/
+```
+
+In this repo, prefer **`pnpm stub-scan`** (also runs as part of **`pnpm lint`**) — scans `src/` and `relay/src/` and excludes `*.test.ts` / `*.d.ts`. For PvP glue in **`src/scenes`**, run **`pnpm stub-scan:audit`** before claiming **real-sync** milestones (`src/ci/stubScan.ts` — scene-level stub markers). **Open PvP product gaps** (chart negotiation, persistent relay session, remote HUD) are **indexed** in **`docs/tasks-pvp-real-sync.md`** under **Remaining product gaps**, with detailed rows in Phase **N** / **S**.
+
+Any match outside test directories is a failure.
+
+---
+
+### PRD to Implementation mapping (mandatory)
+
+| PRD Requirement | Code Path | Test File | Status |
+| --------------- | --------- | --------- | ------ |
+
+Rules:
+
+- Every requirement must map
+- Missing mapping means not implemented
 
 ---
 
 ## 5. Implementation phase
 
-Only after §4 is satisfied:
+Workflow:
 
-1. Pick the **first unchecked** task in `docs/tasks-<slug>.md`.
-2. Implement with **TDD** for pure code; **BDD** when the task row says Playwright.
-3. Run **global gates** at appropriate intervals (at least before PR merge).
-4. **Check the box** only when tests for that slice pass.
-5. Update **Handoff** in the tasks file when stopping work.
-6. When **only `RP.1`** (§4.5) remains: confirm **all** gates green one last time, then draft the **release-please** commit message and check **`RP.1`** — no other rows should follow it.
-
----
-
-## 6. Definition of done (project / initiative)
-
-The initiative is **complete** only when:
-
-- [ ] `docs/prd-<slug>.md` reflects final shipped behavior (or points to ADRs for intentional diffs).
-- [ ] `docs/tasks-<slug>.md` has **all** checkboxes **checked**, including **`RP.1`** (§4.5) **last** — the release-please commit message is written only after everything else is done.
-- [ ] `pnpm lint && pnpm test && pnpm test:coverage` pass on the merge target.
-- [ ] `AGENTS.md` / `docs/test-plans.md` updated if new systems need ongoing proof.
-
-**Partial implementation is forbidden** for initiatives run under this process unless an explicit **phased release** is documented in the PRD **and** mirrored in tasks with clear phase boundaries.
+1. Pick first unchecked task
+2. Implement with TDD or BDD
+3. Run gates
+4. Provide evidence
+5. Check box only if valid
 
 ---
 
-## 7. Testing requirements (embedded in every todo file)
+## Evidence requirement (non-optional)
 
-Every `docs/tasks-<slug>.md` **must** include explicit rows or gate sections for:
+| Claim                   | Required evidence         |
+| ----------------------- | ------------------------- |
+| No stubs                | Stub scan output          |
+| Tests pass              | pnpm test output          |
+| Coverage met            | pnpm test:coverage output |
+| Requirement implemented | PRD mapping               |
+| Integration works       | Test or log proof         |
 
-1. **TDD** — Vitest; new pure modules with tests first where feasible.
-2. **BDD** — Playwright (or repo-standard E2E) for user journeys where applicable.
-3. **`pnpm test`** — 100% pass before merge.
-4. **`pnpm test:coverage`** — meets **`vitest.config.ts`** thresholds (this repo commonly enforces **≥ 50%** lines and statements on included globs).
-5. **`RP.1`** — final row per §4.5 (release-please commit message), checked **after** items 1–4 are satisfied for the initiative.
-
-Phaser scenes may stay thin; **extract logic** to testable modules so coverage stays meaningful (`AGENTS.md` aligns with this).
-
----
-
-## 8. File naming summary
-
-| Phase    | Path pattern                |
-| -------- | --------------------------- |
-| Research | `docs/research/<slug>.md`   |
-| Plan     | `docs/plans/<slug>-plan.md` |
-| PRD      | `docs/prd-<slug>.md`        |
-| Todos    | `docs/tasks-<slug>.md`      |
-
-Use a **consistent `<slug>`** across all four when they describe the same initiative.
+No evidence means failure.
 
 ---
 
-## 9. Relationship to other repo docs
+## Zero-stub invariant (hard gate)
 
-- **`AGENTS.md`** — contributor expectations; points **here** for full delivery process.
-- **`plan.md`** — product roadmap; initiatives must align or update `plan.md` when scope ships.
-- **`docs/merge-gates.md`** — merge eligibility; process does not replace CI.
-- **`docs/test-plans.md`** — extend when new systems ship.
+Before:
+
+- Checking any box
+- Moving to next task
+- Completing milestone
+- Completing project
+
+Must verify:
+
+- No stubs exist
+- No TODO or FIXME outside tests
+- All PRD paths implemented
+
+If violated:
+
+- Task is incomplete
+- Must fix or decompose
 
 ---
 
-## 10. Changelog of this process
+## Integration enforcement
 
-| Date       | Change                                                                                                                                                                                                                |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-04-06 | Initial version; §4.5–4.6: mandatory final task **`RP.1`** (release-please / Conventional Commits message, last checkbox); research → plan → review → PRD → tasks → implementation; TDD/BDD/coverage; handoff blocks. |
+For each REAL integration:
+
+- Must run in tests
+- No mocking allowed
+- Must assert execution
+
+---
+
+## Failure-mode requirement
+
+Each integration must test:
+
+- Success path
+- Failure path
+
+---
+
+## Data flow validation
+
+Must test:
+
+- Input → transformation → output
+- Real state changes
+
+No-op logic is failure.
+
+---
+
+## Test quality rules
+
+Tests must:
+
+- Assert specific values
+- Fail on incorrect logic
+- Include negative cases
+
+Forbidden:
+
+- Assertions that only check existence
+- Always-true tests
+
+---
+
+## Skipped work rule
+
+Forbidden:
+
+- test.skip
+- describe.skip
+- it.only
+
+---
+
+## 6. Coverage rules (revised)
+
+1. Global thresholds must pass
+2. Changed files must meet at least 80 percent coverage
+3. Critical modules must meet at least 90 percent coverage
+
+---
+
+## Coverage integrity
+
+Coverage is invalid if:
+
+- Only happy paths are tested
+- Branches are untested
+- Stub logic passes tests
+
+---
+
+## 7. Command output requirement
+
+Must include raw output of:
+
+- pnpm lint
+- pnpm test
+- pnpm test:coverage
+- stub scan
+
+Summaries are not acceptable.
+
+---
+
+## Reproducibility rule
+
+Another agent must be able to run the same commands and observe the same results.
+
+---
+
+## 8. Pre-release certification
+
+Before final completion:
+
+- No stubs exist
+- All PRD requirements mapped
+- No skipped tests
+- Integrations verified
+- Failure modes tested
+
+---
+
+## 9. Final task: RP.1
+
+Must be the last checkbox.
+
+Cannot be completed unless:
+
+- All tasks complete
+- All evidence present
+- Zero-stub invariant satisfied
+
+---
+
+## 10. Definition of Done
+
+Complete only if:
+
+- All tasks checked
+- RP.1 complete
+- All gates pass
+- Zero-stub invariant holds globally
+- Evidence provided
+
+If any stub exists:
+
+- Initiative is not complete
+
+---
+
+## 11. Enforcement model
+
+Assume:
+
+- Implementer will attempt shortcuts
+- Assertions are untrusted
+- Evidence is required
+
+---
+
+## 12. File naming
+
+| Phase    | Path                      |
+| -------- | ------------------------- |
+| Research | docs/research/<slug>.md   |
+| Plan     | docs/plans/<slug>-plan.md |
+| PRD      | docs/prd-<slug>.md        |
+| Tasks    | docs/tasks-<slug>.md      |
+
+---
+
+## 13. Final principle
+
+If something is:
+
+- not tested
+- not evidenced
+- not mapped
+- or contains a stub
+
+Then it is not done.

@@ -256,7 +256,13 @@ OAuth **redirect URIs** must match the URLs where the app runs. After you have a
 
 - Add **`https://dance.malldao.xyz/...`** (and preview URLs if needed) to whatever **OAuth client metadata** your PDS / IdP requires.
 
-The app uses `BrowserOAuthClient` without embedded `clientMetadata` in code; **production** setups often need **hosted client metadata** — follow [@atproto/oauth-client-browser](https://github.com/bluesky-social/oauth-client-browser) docs for your PDS. Anonymous play does not need this.
+The app emits **`/oauth-client-metadata.json`** at build time (see `oauthClientMetadata.ts` + Vite plugin). The **authorization server** (e.g. Bluesky) **fetches that URL over HTTPS** to validate your client before **`/oauth/par`**. That request **must return 200** with JSON — **without** a logged-in browser session.
+
+**Vercel Preview + “Unauthorized” / `invalid_client_metadata`:** If **Deployment Protection** (password, SSO, or [Vercel Authentication](https://vercel.com/docs/security/deployment-protection)) is on, **server-side** fetches to `https://*.vercel.app/oauth-client-metadata.json` often get **401**. Turn **off** protection for the environment where you test OAuth, or test on a **public** deployment (e.g. Production on a custom domain without protection). Verify with:
+
+`curl -sI "https://YOUR-HOST/oauth-client-metadata.json"` — expect **`200`**, not **`401`**.
+
+Follow [@atproto/oauth-client-browser](https://github.com/bluesky-social/oauth-client-browser) for metadata shape. Anonymous play does not need OAuth.
 
 ---
 
@@ -287,12 +293,14 @@ User’s browser
 
 ## 7. Troubleshooting
 
-| Symptom                      | Things to check                                                                              |
-| ---------------------------- | -------------------------------------------------------------------------------------------- |
-| Sync Lab never connects      | **`VITE_RELAY_WS`** wrong or missing; typo (`wss` not `https`). Redeploy after env change.   |
-| Works locally, not on Vercel | Production build has **no** dev default relay; env must be set on Vercel.                    |
-| OAuth fails on production    | Redirect URI / client metadata not updated for the **new** hostname.                         |
-| 404 on `/songs/...`          | Path wrong or rewrite misconfiguration; default `vercel.json` does **not** rewrite `/songs`. |
+| Symptom                                                                              | Things to check                                                                                                                                             |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sync Lab never connects                                                              | **`VITE_RELAY_WS`** wrong or missing; typo (`wss` not `https`). Redeploy after env change.                                                                  |
+| Works locally, not on Vercel                                                         | Production build has **no** dev default relay; env must be set on Vercel.                                                                                   |
+| OAuth fails on production                                                            | Redirect URI / client metadata not updated for the **new** hostname.                                                                                        |
+| `invalid_client_metadata` / **Unauthorized** fetching `…/oauth-client-metadata.json` | **Deployment Protection** on Vercel (or similar) blocking **server** fetches — disable for that env or use a public URL; confirm with `curl -sI` → **200**. |
+| `inject.js` / `content.js` / JSON-RPC **`32603`**                                    | Usually a **browser extension**, not ATDance — ignore or test in a clean profile.                                                                           |
+| 404 on `/songs/...`                                                                  | Path wrong or rewrite misconfiguration; default `vercel.json` does **not** rewrite `/songs`.                                                                |
 
 ---
 

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { loadAtprotoOAuthClient } from '@/auth/streamplaceOAuth';
+import { wireAtprotoSignInForm } from '@/scenes/signInFormDom';
 
 /**
  * Required when no ATProto session (PRD P0). OAuth client aligns with Streamplace patterns.
@@ -33,13 +33,11 @@ export class SignInScene extends Phaser.Scene {
       )
       .setOrigin(0.5);
 
-    const parent = this.game.canvas.parentElement;
-    if (!parent) {
-      return;
-    }
+    /** Fixed to `body` so Phaser’s canvas (full-game hit target) does not steal clicks from the form. */
+    const host = document.body;
     const wrap = document.createElement('div');
     wrap.style.cssText =
-      'position:absolute;left:50%;transform:translateX(-50%);bottom:24px;width:min(520px,94vw);padding:10px 12px;background:rgba(12,12,20,0.92);border:1px solid #334455;border-radius:8px;font-family:system-ui,sans-serif;font-size:13px;color:#aabbcc;';
+      'position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:2147483646;width:min(520px,94vw);padding:10px 12px;background:rgba(12,12,20,0.92);border:1px solid #334455;border-radius:8px;font-family:system-ui,sans-serif;font-size:13px;color:#aabbcc;pointer-events:auto;';
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
     const status = document.createElement('span');
@@ -57,26 +55,12 @@ export class SignInScene extends Phaser.Scene {
     btn.textContent = 'Sign in with ATProto';
     btn.style.cssText =
       'padding:8px 12px;cursor:pointer;border-radius:4px;border:1px solid #556677;background:#2a2a36;color:#e8e8f0;';
-    btn.addEventListener('click', () => {
-      void (async () => {
-        const h = input.value.trim();
-        if (!h) {
-          status.textContent = 'Enter your handle.';
-          return;
-        }
-        const client = await loadAtprotoOAuthClient();
-        if (!client) {
-          status.textContent = 'OAuth client unavailable (check env).';
-          return;
-        }
-        await client.signInRedirect(h);
-      })();
-    });
+    wireAtprotoSignInForm(input, btn, status);
     row.appendChild(input);
     row.appendChild(btn);
     wrap.appendChild(status);
     wrap.appendChild(row);
-    parent.appendChild(wrap);
+    host.appendChild(wrap);
     this.events.once('shutdown', () => {
       wrap.remove();
     });

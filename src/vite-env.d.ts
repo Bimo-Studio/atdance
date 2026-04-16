@@ -16,6 +16,8 @@ interface ImportMetaEnv {
   /** Comma-separated DIDs allowed when invite-only mode is on. */
   readonly VITE_ATPROTO_ALLOWLIST_DIDS?: string;
   readonly VITE_RELAY_WS?: string;
+  /** Optional relay HTTPS origin when it cannot be derived from `VITE_RELAY_WS` (e.g. TLS terminator path). */
+  readonly VITE_RELAY_HTTP?: string;
   /** P2P bootstrap `wss://` / `ws://` URLs (comma-separated or JSON array). See `docs/prd-p2p-sync.md`. */
   readonly VITE_P2P_BOOTSTRAP?: string;
   /** `p2p` to default Sync Lab to P2P spike (also use `?sync=p2p`). */

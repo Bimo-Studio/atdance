@@ -9,7 +9,7 @@ export function oauthClientMetadataObject(origin: string): Record<string, unknow
     client_id: clientId,
     client_name: 'ATDance',
     client_uri: base,
-    redirect_uris: [`${base}/`],
+    redirect_uris: [`${base}/`, `${base}/admin`, `${base}/admin/`],
     scope: 'atproto',
     grant_types: ['authorization_code', 'refresh_token'],
     response_types: ['code'],
