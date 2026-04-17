@@ -46,6 +46,9 @@ describe('handleRelayHttp', () => {
     const res = await handleRelayHttp(req, { ...baseEnv, ATDANCE_APP_ORIGINS: '*' });
     expect(res.status).toBe(204);
     expect(res.headers.get('access-control-allow-origin')).toBe('https://app.test');
+    expect(res.headers.get('access-control-allow-headers')).toBe(
+      'authorization, content-type, dpop',
+    );
   });
 
   it('allowlist check returns allowed and version', async () => {
@@ -63,10 +66,18 @@ describe('handleRelayHttp', () => {
   });
 
   it('admin GET returns 401 when bearer missing', async () => {
-    vi.mocked(requireAdminBearer).mockResolvedValue({ ok: false, status: 401 });
+    vi.mocked(requireAdminBearer).mockResolvedValue({
+      ok: false,
+      status: 401,
+      reason: 'missing_bearer',
+    });
     const req = new Request('https://relay.test/admin/allowlist/v1');
     const res = await handleRelayHttp(req, baseEnv);
     expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({
+      error: 'admin_auth_failed',
+      reason: 'missing_bearer',
+    });
   });
 
   it('admin GET returns list when authorized', async () => {

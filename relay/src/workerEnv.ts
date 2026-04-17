@@ -7,4 +7,16 @@ export interface RelayWorkerEnv {
   readonly ATDANCE_APP_ORIGINS?: string;
   /** Handle allowed to use admin APIs (default `distributed.camp`). */
   readonly ATDANCE_ADMIN_HANDLE?: string;
+  /** Optional: pin admin account DID (avoids handle resolution drift vs OAuth `sub`). */
+  readonly ATDANCE_ADMIN_DID?: string;
+  /**
+   * Optional: full URL of the OAuth AS JWKS document (overrides `jwks_uri` from issuer metadata).
+   * Use when metadata points at an empty JWKS (e.g. some hosts return `{"keys":[]}` publicly).
+   */
+  readonly ATDANCE_OAUTH_AS_JWKS_URL?: string;
+  /**
+   * Optional: inline JWKS JSON (`{"keys":[...]}`) when the published `jwks_uri` has no keys.
+   * Prefer rotating this secret when the AS rotates signing keys.
+   */
+  readonly ATDANCE_OAUTH_AS_JWKS_JSON?: string;
 }

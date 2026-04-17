@@ -25,6 +25,9 @@
     "e2e:install": "playwright install chromium",
     "relay:dev": "wrangler dev --config relay/wrangler.toml",
     "relay:deploy": "wrangler deploy --config relay/wrangler.toml",
+    "diag:deploy": "python3 scripts/deploy_diagnostics.py",
+    "diag:deps": "pip3 install -r scripts/requirements-diagnostics.txt",
+    "diag": "pnpm diag:deps && pnpm diag:deploy",
     "graphics:chroma": "tsx scripts/applyMagentaChromaKey.ts",
     "prepare": "husky",
     "commitlint": "commitlint --edit"

@@ -13,6 +13,13 @@ ATPROTO_ALLOWLIST_DIDS = "did:plc:ya2boguixgy4757qqtw7gwch, did:plc:qdsp7mb3o7ir
 ATDANCE_APP_ORIGINS = "*"
 # Admin API: OAuth token sub must match this handle’s resolved DID (see relay/src/adminVerify.ts).
 ATDANCE_ADMIN_HANDLE = "distributed.camp"
+# Optional: pin admin DID if handle resolution and OAuth sub must match exactly (set in dashboard if needed).
+# ATDANCE_ADMIN_DID = "did:plc:…"
+#
+# If your OAuth AS publishes an empty JWKS at metadata jwks_uri (bsky.social/oauth/jwks returns {"keys":[]}
+# as of 2026-04), JWT admin auth cannot verify until you set one of:
+#   ATDANCE_OAUTH_AS_JWKS_URL — alternate JWKS URL, or
+#   ATDANCE_OAUTH_AS_JWKS_JSON — inline {"keys":[...]} (rotate when the AS rotates signing keys).
 
 # Live allowlist edits (KV created in Cloudflare; binding name must stay ALLOWLIST_KV).
 [[kv_namespaces]]

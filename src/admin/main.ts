@@ -1,6 +1,6 @@
+import type { OAuthSession } from '@atproto/oauth-client-browser';
 import { formatAtprotoSignInErrorMessage } from '@/auth/atprotoSignInUserMessage';
 import { normalizeAtprotoHandleInput } from '@/auth/normalizeAtprotoHandleInput';
-import { getOAuthAccessTokenForRelay } from '@/auth/oauthAccessToken';
 import {
   getAtprotoOAuthSession,
   initAtprotoSessionOnBoot,
@@ -63,16 +63,67 @@ async function adminFetch(path: string, init: RequestInit = {}): Promise<Respons
   if (session === null) {
     throw new Error('Not signed in');
   }
-  const tok = await getOAuthAccessTokenForRelay(session);
-  if (tok === null) {
-    throw new Error('No access token');
-  }
+  const base = origin.replace(/\/$/, '');
+  const p = path.startsWith('/') ? path : `/${path}`;
+  const url = `${base}${p}`;
   const headers = new Headers(init.headers);
-  headers.set('Authorization', tok.headerValue);
   if (init.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  return fetch(`${origin}${path}`, { ...init, headers });
+  return (session as OAuthSession).fetchHandler(url, { ...init, headers });
+}
+
+/** User-visible hint for relay `admin_auth_failed` JSON `reason` (deployed relay must return this body). */
+function adminAuthReasonUserHint(reason: string): string {
+  switch (reason) {
+    case 'forbidden':
+      return 'Your token’s DID does not match the DID for the configured admin handle.';
+    case 'jwt_verify':
+    case 'invalid_token':
+      return 'The access token could not be verified (try Sign out, then sign in again).';
+    case 'jwks_empty':
+      return 'Your OAuth server’s published JWKS has no public keys (relay operator: set ATDANCE_OAUTH_AS_JWKS_JSON or ATDANCE_OAUTH_AS_JWKS_URL).';
+    case 'issuer_metadata':
+    case 'jwks':
+      return 'The relay could not load your OAuth server’s signing keys (check issuer reachability).';
+    case 'sub':
+      return 'The access token has no ATProto DID in sub.';
+    case 'admin_handle':
+      return 'The relay could not resolve ATDANCE_ADMIN_HANDLE via the public Bluesky API.';
+    case 'missing_bearer':
+      return 'No Authorization bearer was sent.';
+    default:
+      return reason;
+  }
+}
+
+async function readAdminHttpErrorLine(r: Response): Promise<string> {
+  const fallback =
+    r.status === 403
+      ? 'Not authorized (admin only).'
+      : r.status === 401
+        ? 'Not signed in (missing token).'
+        : `Error ${r.status}`;
+  try {
+    const j = (await r.json()) as {
+      error?: string;
+      reason?: string;
+      token_sub?: string;
+      expected_did?: string;
+    };
+    if (j.error !== 'admin_auth_failed' || typeof j.reason !== 'string') {
+      return fallback;
+    }
+    const didHint =
+      j.reason === 'forbidden' &&
+      typeof j.token_sub === 'string' &&
+      typeof j.expected_did === 'string'
+        ? `Token sub ${j.token_sub} ≠ relay expected ${j.expected_did}. `
+        : '';
+    return `${fallback} — ${didHint}${adminAuthReasonUserHint(j.reason)}`;
+  } catch {
+    return fallback;
+  }
 }
 
 async function loadList(root: HTMLElement, status: HTMLElement): Promise<void> {
@@ -80,7 +131,7 @@ async function loadList(root: HTMLElement, status: HTMLElement): Promise<void> {
   try {
     const r = await adminFetch('/admin/allowlist/v1');
     if (!r.ok) {
-      status.textContent = r.status === 403 ? 'Not authorized (admin only).' : `Error ${r.status}`;
+      status.textContent = await readAdminHttpErrorLine(r);
       return;
     }
     const data = (await r.json()) as ListResponse;
@@ -289,7 +340,7 @@ export async function mountAdminApp(root: HTMLElement): Promise<void> {
           body: JSON.stringify(body),
         });
         if (!r.ok) {
-          status.textContent = `Add failed (${r.status})`;
+          status.textContent = `Add failed (${r.status}). ${await readAdminHttpErrorLine(r)}`;
           return;
         }
         input.value = '';
@@ -315,7 +366,7 @@ export async function mountAdminApp(root: HTMLElement): Promise<void> {
           body: JSON.stringify({ did: selectedDid }),
         });
         if (!r.ok) {
-          status.textContent = `Remove failed (${r.status})`;
+          status.textContent = `Remove failed (${r.status}). ${await readAdminHttpErrorLine(r)}`;
           return;
         }
         selectedDid = null;

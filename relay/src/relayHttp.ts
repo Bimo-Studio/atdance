@@ -39,7 +39,7 @@ function corsHeaders(request: Request, env: RelayWorkerEnv): Record<string, stri
   };
   if (allow !== null) {
     h['access-control-allow-origin'] = allow;
-    h['access-control-allow-headers'] = 'authorization, content-type';
+    h['access-control-allow-headers'] = 'authorization, content-type, dpop';
     h['access-control-allow-methods'] = 'GET, POST, OPTIONS';
   }
   return h;
@@ -50,6 +50,19 @@ function json(data: unknown, init: number, cors: Record<string, string>): Respon
     status: init,
     headers: { 'content-type': 'application/json; charset=utf-8', ...cors },
   });
+}
+
+function adminAuthJson(
+  admin: { reason: string; details?: { token_sub: string; expected_did: string } },
+  status: number,
+  cors: Record<string, string>,
+): Response {
+  const body: Record<string, unknown> = { error: 'admin_auth_failed', reason: admin.reason };
+  if (admin.details !== undefined) {
+    body.token_sub = admin.details.token_sub;
+    body.expected_did = admin.details.expected_did;
+  }
+  return json(body, status, cors);
 }
 
 async function parseAddBody(body: unknown): Promise<AllowlistRow | null> {
@@ -98,7 +111,7 @@ export async function handleRelayHttp(request: Request, env: RelayWorkerEnv): Pr
   if (path === '/admin/allowlist/v1' && request.method === 'GET') {
     const admin = await requireAdminBearer(request, env);
     if (!admin.ok) {
-      return new Response(null, { status: admin.status, headers: cors });
+      return adminAuthJson(admin, admin.status, cors);
     }
     const eff = await getEffectiveAllowlist(env.ALLOWLIST_KV, env);
     return json(
@@ -118,7 +131,7 @@ export async function handleRelayHttp(request: Request, env: RelayWorkerEnv): Pr
     }
     const admin = await requireAdminBearer(request, env);
     if (!admin.ok) {
-      return new Response(null, { status: admin.status, headers: cors });
+      return adminAuthJson(admin, admin.status, cors);
     }
     let body: unknown;
     try {
@@ -140,7 +153,7 @@ export async function handleRelayHttp(request: Request, env: RelayWorkerEnv): Pr
     }
     const admin = await requireAdminBearer(request, env);
     if (!admin.ok) {
-      return new Response(null, { status: admin.status, headers: cors });
+      return adminAuthJson(admin, admin.status, cors);
     }
     let body: unknown;
     try {

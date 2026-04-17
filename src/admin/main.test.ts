@@ -9,10 +9,6 @@ vi.mock('@/bsky/publicAppview', () => ({
   searchActorsTypeahead: vi.fn(),
 }));
 
-vi.mock('@/auth/oauthAccessToken', () => ({
-  getOAuthAccessTokenForRelay: vi.fn(),
-}));
-
 vi.mock('@/auth/atprotoSession', () => ({
   initAtprotoSessionOnBoot: vi.fn().mockResolvedValue(undefined),
   getAtprotoOAuthSession: vi.fn(),
@@ -34,9 +30,18 @@ import {
 } from '@/bsky/publicAppview';
 import { getAtprotoOAuthSession, initAtprotoSessionOnBoot } from '@/auth/atprotoSession';
 import { currentAtdanceOAuthRedirectUri } from '@/auth/loopbackOAuthRedirectUris';
-import { getOAuthAccessTokenForRelay } from '@/auth/oauthAccessToken';
 import { loadAtprotoOAuthClient } from '@/auth/streamplaceOAuth';
 import { ADMIN_UI_HANDLE, mountAdminApp, resetAdminTableSelectionForTests } from '@/admin/main';
+
+function mockAdminOAuthSession(
+  sub: string,
+  fetchMock: (input: RequestInfo, init?: RequestInit) => Promise<Response>,
+): void {
+  vi.mocked(getAtprotoOAuthSession).mockReturnValue({
+    sub,
+    fetchHandler: (pathname: string, init?: RequestInit) => fetchMock(pathname, init),
+  } as never);
+}
 
 function rootRedirectMatcher() {
   const redirect_uri = currentAtdanceOAuthRedirectUri({
@@ -58,7 +63,6 @@ describe('mountAdminApp', () => {
     vi.mocked(fetchBskyHandleForDid).mockReset();
     vi.mocked(resolveAtHandleToDid).mockReset();
     vi.mocked(searchActorsTypeahead).mockReset();
-    vi.mocked(getOAuthAccessTokenForRelay).mockReset();
     vi.mocked(loadAtprotoOAuthClient).mockReset();
     fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -144,10 +148,26 @@ describe('mountAdminApp', () => {
     expect(root.textContent).toContain('access denied');
   });
 
-  it('renders shell when session DID matches resolved admin DID (profile lookup not required)', async () => {
-    vi.mocked(getAtprotoOAuthSession).mockReturnValue({ sub: 'did:plc:admin' } as never);
+  it('shows relay auth reason when allowlist GET returns 403 with JSON body', async () => {
     vi.mocked(resolveAtHandleToDid).mockResolvedValue('did:plc:admin');
-    vi.mocked(getOAuthAccessTokenForRelay).mockResolvedValue({ headerValue: 'DPoP t' });
+    mockAdminOAuthSession('did:plc:admin', fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: 'admin_auth_failed', reason: 'forbidden' }),
+    } as Response);
+
+    const root = document.getElementById('root')!;
+    await mountAdminApp(root);
+    await vi.waitFor(() => {
+      expect(root.textContent).toContain('Not authorized (admin only)');
+      expect(root.textContent).toContain('does not match the DID for the configured admin handle');
+    });
+  });
+
+  it('renders shell when session DID matches resolved admin DID (profile lookup not required)', async () => {
+    vi.mocked(resolveAtHandleToDid).mockResolvedValue('did:plc:admin');
+    mockAdminOAuthSession('did:plc:admin', fetchMock);
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -170,8 +190,8 @@ describe('mountAdminApp', () => {
 
   it('runs typeahead after @ input (debounced)', async () => {
     vi.useFakeTimers();
-    vi.mocked(getAtprotoOAuthSession).mockReturnValue({ sub: 'did:plc:admin' } as never);
     vi.mocked(resolveAtHandleToDid).mockResolvedValue('did:plc:admin');
+    mockAdminOAuthSession('did:plc:admin', fetchMock);
     vi.mocked(searchActorsTypeahead).mockResolvedValue([{ did: 'did:plc:s', handle: 's.test' }]);
     fetchMock.mockResolvedValue({
       ok: true,
@@ -193,8 +213,7 @@ describe('mountAdminApp', () => {
   });
 
   it('Add resolves naked handle and POSTs add', async () => {
-    vi.mocked(getAtprotoOAuthSession).mockReturnValue({ sub: 'did:plc:admin' } as never);
-    vi.mocked(getOAuthAccessTokenForRelay).mockResolvedValue({ headerValue: 'DPoP t' });
+    mockAdminOAuthSession('did:plc:admin', fetchMock);
     vi.mocked(resolveAtHandleToDid).mockImplementation(async (h: string) => {
       if (h === ADMIN_UI_HANDLE) {
         return 'did:plc:admin';
@@ -240,9 +259,8 @@ describe('mountAdminApp', () => {
   });
 
   it('Remove selected POSTs remove', async () => {
-    vi.mocked(getAtprotoOAuthSession).mockReturnValue({ sub: 'did:plc:admin' } as never);
     vi.mocked(resolveAtHandleToDid).mockResolvedValue('did:plc:admin');
-    vi.mocked(getOAuthAccessTokenForRelay).mockResolvedValue({ headerValue: 'DPoP t' });
+    mockAdminOAuthSession('did:plc:admin', fetchMock);
     fetchMock
       .mockResolvedValueOnce({
         ok: true,

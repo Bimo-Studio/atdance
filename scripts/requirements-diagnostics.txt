@@ -1,0 +1,6 @@
+# Optional deps for scripts/deploy_diagnostics.py.
+# pip install -r scripts/requirements-diagnostics.txt
+#
+# certifi — Mozilla CA bundle (fixes macOS/python.org “unable to get local issuer certificate”).
+beautifulsoup4>=4.12.0
+certifi>=2024.0.0

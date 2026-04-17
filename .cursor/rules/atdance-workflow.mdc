@@ -5,6 +5,13 @@ alwaysApply: true
 
 # ATDance agent workflow
 
+## Commands and examples (no placeholders)
+
+- When the task involves **this repo’s deploys**, use **concrete hosts** from context (e.g. **`https://dance.malldao.xyz`**, **`https://relay.malldao.xyz`**, zone **`malldao.xyz`**) — **do not** leave `YOUR-HOST` / `example.com` for the user to substitute unless the value is genuinely unknown.
+- **Hosting:** this project may use **Cloudflare** (e.g. **Pages** for the static app, **Workers** for `relay.malldao.xyz`). Do **not** assume **Vercel** for `dance.malldao.xyz` unless the user or repo docs say so.
+- **Deploy / DNS diagnostics:** when checking live URLs (`https://dance.malldao.xyz`, `https://relay.malldao.xyz`, issuer metadata, etc.), **run** `curl` (or equivalent) **from the agent** with concrete hosts — do not only paste commands for the user.
+- Same for **paths**: prefer real paths under this workspace over generic placeholders.
+
 ## Human in the loop (minimize)
 
 - **Default:** keep implementing and testing until **`pnpm lint`**, **`pnpm typecheck`**, **`pnpm test`**, and (when relevant) **`pnpm build`** pass. Do **not** stop for the user to run commands, confirm plan steps, or do manual QA **unless** it is an **absolute blocker** (missing secret you cannot stub, destructive prod action, or a product decision that changes scope).
