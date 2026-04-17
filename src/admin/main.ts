@@ -8,6 +8,7 @@ import {
 } from '@/auth/atprotoSession';
 import { atprotoSignInRedirectOptions } from '@/auth/loopbackOAuthRedirectUris';
 import { loadAtprotoOAuthClient } from '@/auth/streamplaceOAuth';
+import { formatRelayAllowlistFetchError } from '@/admin/formatRelayAllowlistFetchError';
 import {
   fetchBskyHandleForDid,
   resolveAtHandleToDid,
@@ -86,7 +87,7 @@ async function loadList(root: HTMLElement, status: HTMLElement): Promise<void> {
     status.textContent = `Version ${data.version}`;
     renderTable(root, data.entries);
   } catch (e) {
-    status.textContent = e instanceof Error ? e.message : String(e);
+    status.textContent = formatRelayAllowlistFetchError(e);
   }
 }
 
@@ -125,12 +126,7 @@ function renderTable(container: HTMLElement, entries: AllowlistEntry[]): void {
 }
 
 export async function mountAdminApp(root: HTMLElement): Promise<void> {
-  appendNodes(root, [
-    el('h1', {}, ['ATDance allowlist']),
-    el('p', { class: 'al-muted' }, [
-      `Only @${ADMIN_UI_HANDLE} may use this page. Changes apply immediately (relay KV); no redeploy.`,
-    ]),
-  ]);
+  appendNodes(root, [el('h1', {}, ['ATDance allowlist'])]);
 
   await initAtprotoSessionOnBoot();
   const session = getAtprotoOAuthSession();
@@ -271,56 +267,64 @@ export async function mountAdminApp(root: HTMLElement): Promise<void> {
 
   addBtn.addEventListener('click', () => {
     void (async () => {
-      const raw = input.value.trim();
-      if (!raw) {
-        return;
-      }
-      let body: { did?: string; handle?: string };
-      if (raw.startsWith('did:')) {
-        body = { did: raw };
-      } else {
-        const h = raw.replace(/^@/, '');
-        const did = await resolveAtHandleToDid(h);
-        if (did === null) {
-          status.textContent = 'Could not resolve handle.';
+      try {
+        const raw = input.value.trim();
+        if (!raw) {
           return;
         }
-        body = { did, handle: h.toLowerCase() };
+        let body: { did?: string; handle?: string };
+        if (raw.startsWith('did:')) {
+          body = { did: raw };
+        } else {
+          const h = raw.replace(/^@/, '');
+          const did = await resolveAtHandleToDid(h);
+          if (did === null) {
+            status.textContent = 'Could not resolve handle.';
+            return;
+          }
+          body = { did, handle: h.toLowerCase() };
+        }
+        const r = await adminFetch('/admin/allowlist/v1/add', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) {
+          status.textContent = `Add failed (${r.status})`;
+          return;
+        }
+        input.value = '';
+        suggest.hidden = true;
+        const data = (await r.json()) as { entries: AllowlistEntry[] };
+        status.textContent = 'Saved.';
+        renderTable(tableHost, data.entries);
+      } catch (e) {
+        status.textContent = formatRelayAllowlistFetchError(e);
       }
-      const r = await adminFetch('/admin/allowlist/v1/add', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      if (!r.ok) {
-        status.textContent = `Add failed (${r.status})`;
-        return;
-      }
-      input.value = '';
-      suggest.hidden = true;
-      const data = (await r.json()) as { entries: AllowlistEntry[] };
-      status.textContent = 'Saved.';
-      renderTable(tableHost, data.entries);
     })();
   });
 
   removeBtn.addEventListener('click', () => {
     void (async () => {
-      if (selectedDid === null) {
-        status.textContent = 'Select a row first.';
-        return;
+      try {
+        if (selectedDid === null) {
+          status.textContent = 'Select a row first.';
+          return;
+        }
+        const r = await adminFetch('/admin/allowlist/v1/remove', {
+          method: 'POST',
+          body: JSON.stringify({ did: selectedDid }),
+        });
+        if (!r.ok) {
+          status.textContent = `Remove failed (${r.status})`;
+          return;
+        }
+        selectedDid = null;
+        const data = (await r.json()) as { entries: AllowlistEntry[] };
+        status.textContent = 'Removed.';
+        renderTable(tableHost, data.entries);
+      } catch (e) {
+        status.textContent = formatRelayAllowlistFetchError(e);
       }
-      const r = await adminFetch('/admin/allowlist/v1/remove', {
-        method: 'POST',
-        body: JSON.stringify({ did: selectedDid }),
-      });
-      if (!r.ok) {
-        status.textContent = `Remove failed (${r.status})`;
-        return;
-      }
-      selectedDid = null;
-      const data = (await r.json()) as { entries: AllowlistEntry[] };
-      status.textContent = 'Removed.';
-      renderTable(tableHost, data.entries);
     })();
   });
 

@@ -34,10 +34,19 @@ const RECEPTOR_H = 38;
 
 const LANE_RECEPTOR_LABELS: readonly string[] = ['Left', 'Down', 'Up', 'Right'];
 
+/** Solo / shared pre-play: auto-start if the player does not tap in time. */
+const AUTOSTART_SECONDS = 15;
+/** Hold Esc or Q this long to bail to song list (with on-screen countdown). */
+const EXIT_HOLD_MS = 5000;
+
 /** Muted slate + single cool accent — readable without rainbow panels. */
 const RECEPTOR_FILL = 0x243448;
 const RECEPTOR_FILL_ALPHA = 0.62;
 const RECEPTOR_STROKE = 0x7a9cbc;
+/** While the lane arrow key is held: invert fill/stroke so input registers before the hit. */
+const RECEPTOR_FILL_HELD = RECEPTOR_STROKE;
+const RECEPTOR_FILL_ALPHA_HELD = 0.9;
+const RECEPTOR_STROKE_HELD = RECEPTOR_FILL;
 const NOTE_FILL = 0x5a9fd0;
 
 const DEMO_CHART_URL = '/songs/synrg/synrg.dance';
@@ -160,6 +169,36 @@ export class PlayScene extends Phaser.Scene {
   /** Prevents overlapping beginAudio; pointer/Space can fire before async work finishes. */
   private audioStartPending = false;
   private lastPvpScoreTickMs = 0;
+  /** Browser `setInterval` id (number in DOM lib). */
+  private autostartIntervalId: number | null = null;
+  private autostartSecondsRemaining = 0;
+  /** `performance.now()` when key went down (window capture — reliable vs Phaser Key.duration). */
+  private escHoldSince: number | null = null;
+  private qHoldSince: number | null = null;
+  private exitHoldLatch = false;
+  private exitHoldHud!: Phaser.GameObjects.Text;
+  /** Lane order: Left, Down, Up, Right — same as {@link keyCodeToLane}. */
+  private laneKeys: Phaser.Input.Keyboard.Key[] = [];
+
+  private readonly onWindowKeyDown = (ev: KeyboardEvent): void => {
+    if (ev.repeat) {
+      return;
+    }
+    if (ev.code === 'Escape') {
+      this.escHoldSince = performance.now();
+      ev.preventDefault();
+    } else if (ev.code === 'KeyQ') {
+      this.qHoldSince = performance.now();
+    }
+  };
+
+  private readonly onWindowKeyUp = (ev: KeyboardEvent): void => {
+    if (ev.code === 'Escape') {
+      this.escHoldSince = null;
+    } else if (ev.code === 'KeyQ') {
+      this.qHoldSince = null;
+    }
+  };
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -194,6 +233,11 @@ export class PlayScene extends Phaser.Scene {
     this.audioClock = null;
     this.peerHud = null;
     this.lastPvpScoreTickMs = 0;
+    this.autostartIntervalId = null;
+    this.autostartSecondsRemaining = 0;
+    this.exitHoldLatch = false;
+    this.escHoldSince = null;
+    this.qHoldSince = null;
 
     const pvpPanel = this.playData.pvp?.remoteHudRef !== undefined;
     const layout = playfieldLayoutForWidth(this.scale.width, pvpPanel);
@@ -244,13 +288,35 @@ export class PlayScene extends Phaser.Scene {
     }
     const hintCx = (this.laneCenterX[0]! + this.laneCenterX[3]!) / 2;
     this.hint = this.add
-      .text(hintCx, 32, 'Loading chart…', {
+      .text(hintCx, 56, 'Loading chart…', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '16px',
-        color: '#8899aa',
+        fontSize: '14px',
+        color: '#aab8c8',
+        align: 'center',
       })
       .setOrigin(0.5, 0);
     this.hint.setDepth(100);
+
+    this.exitHoldHud = this.add
+      .text(this.scale.width / 2, this.scale.height - 20, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#d4b87a',
+        align: 'center',
+      })
+      .setOrigin(0.5, 1);
+    this.exitHoldHud.setDepth(120);
+
+    window.addEventListener('keydown', this.onWindowKeyDown, true);
+    window.addEventListener('keyup', this.onWindowKeyUp, true);
+
+    const kb = this.input.keyboard!;
+    this.laneKeys = [
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
+    ];
 
     void this.bootstrap();
 
@@ -258,6 +324,7 @@ export class PlayScene extends Phaser.Scene {
       if (!this.chartReady || this.started || this.audioStartPending) {
         return;
       }
+      this.cancelAutostart();
       void this.beginAudio();
     };
     this.input.on('pointerdown', tryStart);
@@ -268,6 +335,7 @@ export class PlayScene extends Phaser.Scene {
         return;
       }
       if (ev.code === 'KeyR') {
+        this.cancelAutostart();
         this.scene.start('SongSelectScene');
         return;
       }
@@ -278,6 +346,9 @@ export class PlayScene extends Phaser.Scene {
     });
 
     this.events.once('shutdown', () => {
+      window.removeEventListener('keydown', this.onWindowKeyDown, true);
+      window.removeEventListener('keyup', this.onWindowKeyUp, true);
+      this.cancelAutostart();
       try {
         this.bufferSource?.stop();
       } catch {
@@ -287,6 +358,74 @@ export class PlayScene extends Phaser.Scene {
       this.audioClock = null;
       this.playData.pvp?.closeRelay?.();
     });
+  }
+
+  private cancelAutostart(): void {
+    if (this.autostartIntervalId !== null) {
+      clearInterval(this.autostartIntervalId);
+      this.autostartIntervalId = null;
+    }
+  }
+
+  /** Pre-play countdown + instructions (skipped when PvP lobby already auto-starts audio). */
+  private scheduleAutostart(): void {
+    this.cancelAutostart();
+    if (this.playData.pvp?.autoStartAudio) {
+      return;
+    }
+    this.autostartSecondsRemaining = AUTOSTART_SECONDS;
+    this.refreshPreStartHint();
+    this.autostartIntervalId = window.setInterval(() => {
+      if (!this.scene.isActive() || this.started || !this.chartReady) {
+        this.cancelAutostart();
+        return;
+      }
+      this.autostartSecondsRemaining -= 1;
+      if (this.autostartSecondsRemaining <= 0) {
+        this.cancelAutostart();
+        void this.beginAudio();
+        return;
+      }
+      this.refreshPreStartHint();
+    }, 1000);
+  }
+
+  private refreshPreStartHint(): void {
+    if (this.started || !this.chartReady) {
+      return;
+    }
+    const best = this.localBest !== undefined ? String(this.localBest) : '—';
+    const n = Math.max(0, this.autostartSecondsRemaining);
+    this.hint.setText(
+      `Click or press Space when ready — starting in ${n}s\nHold Esc or Q for ${Math.round(EXIT_HOLD_MS / 1000)}s to exit · R quick exit · best ${best}`,
+    );
+  }
+
+  private tryExitEarlyByHold(): void {
+    const now = performance.now();
+    const escHeldMs = this.escHoldSince !== null ? now - this.escHoldSince : 0;
+    const qHeldMs = this.qHoldSince !== null ? now - this.qHoldSince : 0;
+    const heldMs = Math.max(escHeldMs, qHeldMs);
+    const holding = this.escHoldSince !== null || this.qHoldSince !== null;
+
+    if (holding && heldMs >= EXIT_HOLD_MS) {
+      if (!this.exitHoldLatch) {
+        this.exitHoldLatch = true;
+        this.exitHoldHud.setText('');
+        this.cancelAutostart();
+        this.scene.start('SongSelectScene');
+      }
+      return;
+    }
+
+    if (!holding) {
+      this.exitHoldLatch = false;
+      this.exitHoldHud.setText('');
+      return;
+    }
+
+    const remainSec = Math.max(1, Math.ceil((EXIT_HOLD_MS - heldMs) / 1000));
+    this.exitHoldHud.setText(`Exit to song list — keep holding Esc or Q (${remainSec}s)`);
   }
 
   private async bootstrap(): Promise<void> {
@@ -367,25 +506,17 @@ export class PlayScene extends Phaser.Scene {
     if (isE2eMode()) {
       setE2ePvpPlayLayout(this.playData.pvp?.remoteHudRef !== undefined ? 'split' : 'solo');
     }
-    const firstScroll = this.notes[0]?.scrollAppearanceTimeSec;
-    const firstCueHint =
-      firstScroll !== undefined && firstScroll > 0.05
-        ? ` First scroll cue ~${firstScroll.toFixed(1)}s after start.`
-        : '';
-    this.hint.setText(
-      `Click or Space to start  •  ←↓↑→ = lanes  •  R = song list  •  judge=${this.judgeMode}${firstCueHint}`,
-    );
     void getLocalBest(this.playKey).then((b) => {
       this.localBest = b;
       if (!this.started) {
-        this.hint.setText(
-          `Click or Space to start  •  local best ${b !== undefined ? String(b) : '—'}  •  ←↓↑→ = lanes  •  R = song list  •  judge=${this.judgeMode}${firstCueHint}`,
-        );
+        this.refreshPreStartHint();
       }
     });
 
     if (this.playData.pvp?.autoStartAudio) {
       void this.beginAudio();
+    } else {
+      this.scheduleAutostart();
     }
   }
 
@@ -408,6 +539,7 @@ export class PlayScene extends Phaser.Scene {
     if (this.started || this.audioStartPending) {
       return;
     }
+    this.cancelAutostart();
     this.audioStartPending = true;
     try {
       const Ctx =
@@ -487,15 +619,10 @@ export class PlayScene extends Phaser.Scene {
       this.audioStartSec = audioStartSec;
       this.started = true;
       setE2eStatus('play-started');
-      let silentHint =
-        'No chart audio file (e.g. synrg.ogg) in public/songs/synrg/ — see public/songs/synrg/README.md. Silent timing.';
-      if (this.torrentAudioBuffer !== null || this.audioUrl !== null) {
-        silentHint =
-          'Audio failed to load or decode — check file path / format. Timing still runs (silent clock).';
-      }
-      this.hint.setText(
-        audioOk ? 'Playing audio — hit notes when cues meet the targets' : silentHint,
-      );
+      const silentHint = audioOk
+        ? 'Hit notes when cues meet the line (←↓↑→)'
+        : 'Silent timing — no audio file decoded. Hit notes when cues meet the line.';
+      this.hint.setText(silentHint);
     } finally {
       this.audioStartPending = false;
     }
@@ -543,6 +670,8 @@ export class PlayScene extends Phaser.Scene {
   }
 
   update(): void {
+    this.tryExitEarlyByHold();
+
     const t = this.effectiveSongTimeSec;
     let anyMiss = false;
     for (const n of this.notes) {
@@ -556,13 +685,18 @@ export class PlayScene extends Phaser.Scene {
     }
 
     const pending = this.notes.filter((n) => n.state === 'pending').length;
-    const hit = this.notes.filter((n) => n.state === 'hit').length;
     const missed = this.notes.filter((n) => n.state === 'missed').length;
-    const rawT = this.songTimeSec;
     const bestStr = this.localBest !== undefined ? String(this.localBest) : '—';
-    this.hud.setText(
-      `${this.songLabel}  |  ${this.judgeMode}  |  t=${t.toFixed(2)}s (raw ${rawT.toFixed(2)})  cal=${(this.calOffsetSec * 1000).toFixed(0)}ms\nscore=${this.score}  combo=${this.combo}  last=${this.lastGrade || '—'}  ok=${hit}  miss=${missed}  pending=${pending}  best=${bestStr}`,
-    );
+    const titleShort =
+      this.songLabel.length > 42 ? `${this.songLabel.slice(0, 40)}…` : this.songLabel;
+    this.hud.setFontSize(this.started ? '16px' : '15px');
+    if (this.started) {
+      this.hud.setText(
+        `${titleShort}\nScore ${this.score}  ·  Combo ${this.combo}  ·  ${this.lastGrade || '—'}  ·  best ${bestStr}`,
+      );
+    } else {
+      this.hud.setText(titleShort);
+    }
 
     const peerRef = this.playData.pvp?.remoteHudRef;
     if (this.peerHud !== null && peerRef !== undefined) {
@@ -604,8 +738,14 @@ export class PlayScene extends Phaser.Scene {
         continue;
       }
       const pts = arrowPointsForLane(lane as LaneIndex, cx, HIT_LINE_Y, RECEPTOR_W, RECEPTOR_H);
-      fillClosedPolygon(this.graphics, pts, RECEPTOR_FILL, RECEPTOR_FILL_ALPHA);
-      strokeClosedPolygon(this.graphics, pts, 2, RECEPTOR_STROKE, 0.92);
+      const laneKey = this.laneKeys[lane];
+      const held = laneKey?.isDown ?? false;
+      const fill = held ? RECEPTOR_FILL_HELD : RECEPTOR_FILL;
+      const fillA = held ? RECEPTOR_FILL_ALPHA_HELD : RECEPTOR_FILL_ALPHA;
+      const stroke = held ? RECEPTOR_STROKE_HELD : RECEPTOR_STROKE;
+      const strokeA = held ? 1 : 0.92;
+      fillClosedPolygon(this.graphics, pts, fill, fillA);
+      strokeClosedPolygon(this.graphics, pts, 2, stroke, strokeA);
     }
 
     for (const cx of this.laneCenterX) {
