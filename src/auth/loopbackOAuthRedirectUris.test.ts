@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   atdanceLoopbackRedirectUris,
   atprotoSignInRedirectOptions,
+  canonicalOAuthAppRootRedirectUri,
   currentAtdanceOAuthRedirectUri,
 } from '@/auth/loopbackOAuthRedirectUris';
 
@@ -59,6 +60,26 @@ describe('currentAtdanceOAuthRedirectUri', () => {
         pathname: '/sync-lab',
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('canonicalOAuthAppRootRedirectUri', () => {
+  it('returns root redirect_uri for admin path (loopback)', () => {
+    expect(
+      canonicalOAuthAppRootRedirectUri({
+        origin: 'http://localhost:5174',
+        pathname: '/admin',
+      } as Location),
+    ).toBe('http://127.0.0.1:5174/');
+  });
+
+  it('returns root redirect_uri for https production-like origin', () => {
+    expect(
+      canonicalOAuthAppRootRedirectUri({
+        origin: 'https://dance.example.com',
+        pathname: '/admin/',
+      } as Location),
+    ).toBe('https://dance.example.com/');
   });
 });
 

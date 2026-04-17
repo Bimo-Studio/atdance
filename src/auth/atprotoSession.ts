@@ -2,7 +2,10 @@ import type { AuthorizeOptions } from '@atproto/oauth-client';
 import type { OAuthSession } from '@atproto/oauth-client-browser';
 
 import { clearInviteRelayGate, resetInviteRelayGateForTests } from '@/auth/inviteRelayGate';
-import { atprotoSignInRedirectOptions } from '@/auth/loopbackOAuthRedirectUris';
+import {
+  ATDANCE_OAUTH_POST_LOGIN_NAV_KEY,
+  atprotoSignInRedirectOptions,
+} from '@/auth/loopbackOAuthRedirectUris';
 import { loadAtprotoOAuthClient } from '@/auth/streamplaceOAuth';
 
 let cachedSession: OAuthSession | null = null;
@@ -40,7 +43,15 @@ export async function initAtprotoSessionOnBoot(): Promise<void> {
     const run = async (): Promise<{ session: OAuthSession } | undefined> => {
       const params = client.readCallbackParams();
       if (params !== null) {
-        return await client.initCallback(params, redirectUri);
+        const r = await client.initCallback(params, redirectUri);
+        if (typeof globalThis.window !== 'undefined') {
+          const nav = globalThis.window.sessionStorage.getItem(ATDANCE_OAUTH_POST_LOGIN_NAV_KEY);
+          if (nav !== null && nav !== '' && nav.startsWith('/') && !nav.startsWith('//')) {
+            globalThis.window.sessionStorage.removeItem(ATDANCE_OAUTH_POST_LOGIN_NAV_KEY);
+            globalThis.window.location.replace(`${globalThis.window.location.origin}${nav}`);
+          }
+        }
+        return r;
       }
       return await client.initRestore();
     };

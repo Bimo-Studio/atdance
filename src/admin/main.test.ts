@@ -29,9 +29,14 @@ import {
   searchActorsTypeahead,
 } from '@/bsky/publicAppview';
 import { getAtprotoOAuthSession, initAtprotoSessionOnBoot } from '@/auth/atprotoSession';
-import { currentAtdanceOAuthRedirectUri } from '@/auth/loopbackOAuthRedirectUris';
+import { canonicalOAuthAppRootRedirectUri } from '@/auth/loopbackOAuthRedirectUris';
 import { loadAtprotoOAuthClient } from '@/auth/streamplaceOAuth';
-import { ADMIN_UI_HANDLE, mountAdminApp, resetAdminTableSelectionForTests } from '@/admin/main';
+import {
+  ADMIN_UI_HANDLE,
+  ATDANCE_RELAY_ADMIN_TOKEN_SESSION_KEY,
+  mountAdminApp,
+  resetAdminTableSelectionForTests,
+} from '@/admin/main';
 
 function mockAdminOAuthSession(
   sub: string,
@@ -43,12 +48,10 @@ function mockAdminOAuthSession(
   } as never);
 }
 
-function rootRedirectMatcher() {
-  const redirect_uri = currentAtdanceOAuthRedirectUri({
-    origin: window.location.origin,
-    pathname: window.location.pathname,
+function adminSignInRedirectMatcher() {
+  return expect.objectContaining({
+    redirect_uri: canonicalOAuthAppRootRedirectUri(window.location),
   });
-  return expect.objectContaining({ redirect_uri });
 }
 
 describe('mountAdminApp', () => {
@@ -57,6 +60,7 @@ describe('mountAdminApp', () => {
   beforeEach(() => {
     vi.useRealTimers();
     document.body.innerHTML = '<div id="root"></div>';
+    sessionStorage.removeItem(ATDANCE_RELAY_ADMIN_TOKEN_SESSION_KEY);
     resetAdminTableSelectionForTests();
     vi.mocked(initAtprotoSessionOnBoot).mockClear();
     vi.mocked(getAtprotoOAuthSession).mockReset();
@@ -82,6 +86,33 @@ describe('mountAdminApp', () => {
     const root = document.getElementById('root')!;
     await mountAdminApp(root);
     expect(root.textContent).toContain('Sign in with the same ATProto account');
+    expect(root.textContent).toContain('operator token');
+  });
+
+  it('renders allowlist shell using relay operator token without OAuth session', async () => {
+    sessionStorage.setItem(ATDANCE_RELAY_ADMIN_TOKEN_SESSION_KEY, 'secret-op');
+    vi.mocked(getAtprotoOAuthSession).mockReturnValue(null);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        version: 1,
+        adminHandle: ADMIN_UI_HANDLE,
+        entries: [{ did: 'did:plc:a', handle: 'a.test' }],
+      }),
+    } as Response);
+
+    const root = document.getElementById('root')!;
+    await mountAdminApp(root);
+    expect(root.textContent).toContain('Clear operator token');
+    expect(root.textContent).toContain('did:plc:a');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://relay.test/admin/allowlist/v1',
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    );
+    const hdrs = fetchMock.mock.calls[0]![1]!.headers as Headers;
+    expect(hdrs.get('Authorization')).toBe('Bearer secret-op');
   });
 
   it('starts OAuth from admin sign-in card when Enter is pressed in handle field', async () => {
@@ -96,7 +127,7 @@ describe('mountAdminApp', () => {
       new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
     );
     await vi.waitFor(() =>
-      expect(signInRedirect).toHaveBeenCalledWith('chef.test', rootRedirectMatcher()),
+      expect(signInRedirect).toHaveBeenCalledWith('chef.test', adminSignInRedirectMatcher()),
     );
   });
 
@@ -133,7 +164,7 @@ describe('mountAdminApp', () => {
     const btn = root.querySelector('button.al-btn') as HTMLButtonElement;
     btn.click();
     await vi.waitFor(() =>
-      expect(signInRedirect).toHaveBeenCalledWith('pat.example', rootRedirectMatcher()),
+      expect(signInRedirect).toHaveBeenCalledWith('pat.example', adminSignInRedirectMatcher()),
     );
   });
 

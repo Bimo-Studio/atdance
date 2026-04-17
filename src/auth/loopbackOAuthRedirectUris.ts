@@ -1,6 +1,24 @@
 import type { AuthorizeOptions } from '@atproto/oauth-client';
 
 /**
+ * sessionStorage key: pathname + search to open after OAuth completes on the **app root** `/`.
+ * Set by `/admin` sign-in so one Bluesky consent can serve both the game and admin (same IndexedDB session).
+ */
+export const ATDANCE_OAUTH_POST_LOGIN_NAV_KEY = 'atdance_oauth_post_login_path';
+
+/**
+ * Registered `redirect_uri` that always targets the site root (`https://host/` or loopback `http://127.0.0.1:port/`).
+ * Use with {@link ATDANCE_OAUTH_POST_LOGIN_NAV_KEY} when signing in from `/admin` so the callback is handled by the main bundle’s boot path.
+ */
+export function canonicalOAuthAppRootRedirectUri(loc: Pick<Location, 'origin'>): string {
+  const u = new URL(loc.origin);
+  if (u.protocol === 'http:' && u.hostname === 'localhost') {
+    u.hostname = '127.0.0.1';
+  }
+  return `${u.protocol}//${u.host}/`;
+}
+
+/**
  * Redirect URIs for ATProto **loopback** OAuth (dev). RFC 8252: loopback redirects must use
  * the numeric IP (e.g. `127.0.0.1`), not `localhost`.
  *
