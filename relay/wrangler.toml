@@ -11,13 +11,13 @@ ATPROTO_ALLOWLIST_DIDS = "did:plc:ya2boguixgy4757qqtw7gwch, did:plc:qdsp7mb3o7ir
 # e.g. https://dance.malldao.xyz,https://atdance.vercel.app — must include the exact host that serves /admin.
 # Cloudflare dashboard vars override these [vars] on deploy if set.
 ATDANCE_APP_ORIGINS = "*"
-# Admin API + UI: only this handle (default distributed.camp). ATDANCE_ADMIN_HANDLE=distributed.camp
+# Admin API: OAuth token sub must match this handle’s resolved DID (see relay/src/adminVerify.ts).
+ATDANCE_ADMIN_HANDLE = "distributed.camp"
 
-# Live allowlist edits (no redeploy): create a KV namespace, then uncomment:
-# `pnpm exec wrangler kv namespace create ALLOWLIST_KV`
-# [[kv_namespaces]]
-# binding = "ALLOWLIST_KV"
-# id = "<namespace id>"
+# Live allowlist edits (KV created in Cloudflare; binding name must stay ALLOWLIST_KV).
+[[kv_namespaces]]
+binding = "ALLOWLIST_KV"
+id = "bf4fa3b54b074f819740e9713bd93e86"
 
 # Public hostname via a Worker Route (you create the DNS record yourself — see deployment doc).
 # Requires `malldao.xyz` in this Cloudflare account. Remove this block to use only *.workers.dev.
