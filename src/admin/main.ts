@@ -1,37 +1,16 @@
-import type { AuthorizeOptions } from '@atproto/oauth-client';
-import type { OAuthSession } from '@atproto/oauth-client-browser';
-import { formatAtprotoSignInErrorMessage } from '@/auth/atprotoSignInUserMessage';
-import { normalizeAtprotoHandleInput } from '@/auth/normalizeAtprotoHandleInput';
-import {
-  getAtprotoOAuthSession,
-  initAtprotoSessionOnBoot,
-  signOutAtprotoSession,
-} from '@/auth/atprotoSession';
-import {
-  ATDANCE_OAUTH_POST_LOGIN_NAV_KEY,
-  canonicalOAuthAppRootRedirectUri,
-} from '@/auth/loopbackOAuthRedirectUris';
-import { loadAtprotoOAuthClient } from '@/auth/streamplaceOAuth';
 import { formatRelayAllowlistFetchError } from '@/admin/formatRelayAllowlistFetchError';
-import {
-  fetchBskyHandleForDid,
-  resolveAtHandleToDid,
-  searchActorsTypeahead,
-} from '@/bsky/publicAppview';
+import { resolveAtHandleToDid, searchActorsTypeahead } from '@/bsky/publicAppview';
 import { ATDANCE_OPERATOR_ADMIN_HANDLE } from '@/config/operatorAdminHandle';
 import { relayHttpOriginFromEnv } from '@/util/relayHttpOrigin';
 
 export const ADMIN_UI_HANDLE = ATDANCE_OPERATOR_ADMIN_HANDLE;
 
-/**
- * sessionStorage key for the same secret as Worker `ATDANCE_ADMIN_API_TOKEN`.
- * Bypasses OAuth JWT verification (needed while bsky.social publishes an empty JWKS).
- */
-export const ATDANCE_RELAY_ADMIN_TOKEN_SESSION_KEY = 'atdanceRelayAdminApiToken';
+/** sessionStorage key for relay-issued admin session JWT after password login. */
+export const ATDANCE_RELAY_ADMIN_SESSION_JWT_KEY = 'atdanceRelayAdminSessionJwt';
 
-function getStoredRelayAdminApiToken(): string | null {
+function getStoredAdminSessionJwt(): string | null {
   try {
-    const t = globalThis.sessionStorage?.getItem(ATDANCE_RELAY_ADMIN_TOKEN_SESSION_KEY)?.trim();
+    const t = globalThis.sessionStorage?.getItem(ATDANCE_RELAY_ADMIN_SESSION_JWT_KEY)?.trim();
     return t !== undefined && t !== '' ? t : null;
   } catch {
     return null;
@@ -74,6 +53,65 @@ function relayOrigin(): string | null {
   return relayHttpOriginFromEnv(import.meta.env);
 }
 
+async function fetchAdminSessionOptions(origin: string): Promise<{ passwordLogin: boolean }> {
+  const base = origin.replace(/\/$/, '');
+  try {
+    const r = await fetch(`${base}/admin/session/v1/options`);
+    if (!r.ok) {
+      return { passwordLogin: false };
+    }
+    const j = (await r.json()) as { passwordLogin?: unknown };
+    return { passwordLogin: j.passwordLogin === true };
+  } catch {
+    return { passwordLogin: false };
+  }
+}
+
+async function postAdminPasswordLogin(
+  origin: string,
+  password: string,
+): Promise<{ ok: true; access_token: string } | { ok: false; message: string }> {
+  const base = origin.replace(/\/$/, '');
+  const r = await fetch(`${base}/admin/session/v1/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  let j: Record<string, unknown> = {};
+  try {
+    j = (await r.json()) as Record<string, unknown>;
+  } catch {
+    /* ignore */
+  }
+  if (!r.ok) {
+    if (r.status === 401 && j.error === 'invalid_credentials') {
+      return { ok: false, message: 'Incorrect password.' };
+    }
+    if (j.error === 'admin_login_unconfigured' || j.error === 'admin_session_secret_unconfigured') {
+      return {
+        ok: false,
+        message:
+          'Relay admin sign-in is not fully configured. The operator must set ATDANCE_ADMIN_PASSWORD and ATDANCE_ADMIN_SESSION_SECRET on the relay.',
+      };
+    }
+    if (j.error === 'admin_session_mint_failed') {
+      return {
+        ok: false,
+        message: 'Could not start a session (relay could not resolve the admin account).',
+      };
+    }
+    return {
+      ok: false,
+      message: typeof j.error === 'string' ? j.error : `Error ${r.status}`,
+    };
+  }
+  const tok = j.access_token;
+  if (typeof tok !== 'string' || tok === '') {
+    return { ok: false, message: 'Invalid response from relay.' };
+  }
+  return { ok: true, access_token: tok };
+}
+
 async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const origin = relayOrigin();
   if (origin === null) {
@@ -87,34 +125,29 @@ async function adminFetch(path: string, init: RequestInit = {}): Promise<Respons
     headers.set('Content-Type', 'application/json');
   }
 
-  const apiTok = getStoredRelayAdminApiToken();
-  if (apiTok !== null) {
-    headers.set('Authorization', `Bearer ${apiTok}`);
-    return fetch(url, { ...init, headers });
-  }
-
-  const session = getAtprotoOAuthSession();
-  if (session === null) {
+  const jwt = getStoredAdminSessionJwt();
+  if (jwt === null) {
     throw new Error('Not signed in');
   }
-  return (session as OAuthSession).fetchHandler(url, { ...init, headers });
+  headers.set('Authorization', `Bearer ${jwt}`);
+  return fetch(url, { ...init, headers });
 }
 
 /** User-visible hint for relay `admin_auth_failed` JSON `reason` (deployed relay must return this body). */
 function adminAuthReasonUserHint(reason: string): string {
   switch (reason) {
     case 'forbidden':
-      return 'Your token’s DID does not match the DID for the configured admin handle.';
+      return 'Your session’s DID does not match the DID for the configured admin handle.';
     case 'jwt_verify':
     case 'invalid_token':
-      return 'The access token could not be verified (try Sign out, then sign in again).';
+      return 'Your session could not be verified (try Sign out, then sign in again).';
     case 'admin_api_token_mismatch':
-      return 'Authorization Bearer does not match Worker secret ATDANCE_ADMIN_API_TOKEN (re-run wrangler secret put; same string as in curl).';
+      return 'Authorization Bearer does not match the relay’s configured API token.';
     case 'jwks_empty':
-      return 'OAuth JWKS has no public keys (Bluesky). Use “Relay operator token” below with the same value as Worker ATDANCE_ADMIN_API_TOKEN, or set ATDANCE_OAUTH_AS_JWKS_JSON / _URL on the Worker.';
+      return 'OAuth JWKS had no keys (use password sign-in or configure JWKS on the relay).';
     case 'issuer_metadata':
     case 'jwks':
-      return 'The relay could not load your OAuth server’s signing keys (check issuer reachability).';
+      return 'The relay could not load OAuth signing keys.';
     case 'sub':
       return 'The access token has no ATProto DID in sub.';
     case 'admin_handle':
@@ -205,179 +238,91 @@ function renderTable(container: HTMLElement, entries: AllowlistEntry[]): void {
   container.appendChild(table);
 }
 
-export async function mountAdminApp(root: HTMLElement): Promise<void> {
-  appendNodes(root, [
-    el('h1', {}, ['ATDance']),
+function mountPasswordForm(root: HTMLElement, origin: string): void {
+  const box = el('div', { class: 'al-card' });
+  appendNodes(box, [
+    el('p', { class: 'al-token-setup-lead' }, ['Sign in']),
     el('p', { class: 'al-muted' }, [
-      'Invite-only guest list for this game. If you opened this link by accident, you can close the tab or go back to the game—nothing here is required to play.',
+      'Enter the admin password for this relay. It is set by the operator (not your Bluesky password).',
     ]),
   ]);
-
-  await initAtprotoSessionOnBoot();
-  const session = getAtprotoOAuthSession();
-  const operatorTokenActive = getStoredRelayAdminApiToken() !== null;
-
-  if (!operatorTokenActive && (session === null || !session.sub.startsWith('did:'))) {
-    const box = el('div', { class: 'al-card' });
-    const st = el('p', {}, [
-      'Sign in with the same ATProto account you use in the game, or use an operator token if you run the relay.',
-    ]);
-    const feedback = el('p', {
-      class: 'al-muted al-signin-feedback',
-      role: 'status',
-    }) as HTMLParagraphElement;
-    const input = el('input', {
-      type: 'text',
-      class: 'al-input',
-      placeholder: 'handle.example.com',
-    }) as HTMLInputElement;
-    const btn = el('button', { type: 'button', class: 'al-btn' }, ['Sign in']) as HTMLButtonElement;
-    const doSignIn = (): void => {
-      void (async () => {
-        feedback.textContent = '';
-        feedback.classList.remove('al-signin-feedback--warn');
-        const h = normalizeAtprotoHandleInput(input.value);
-        if (!h) {
-          feedback.textContent = 'Enter your handle.';
-          feedback.classList.add('al-signin-feedback--warn');
-          return;
-        }
-        if (btn.disabled) {
-          return;
-        }
-        btn.disabled = true;
-        feedback.textContent = 'Starting sign-in…';
-        try {
-          const client = await loadAtprotoOAuthClient();
-          if (!client) {
-            feedback.textContent =
-              'OAuth is not configured for this deployment (missing or empty VITE_ATPROTO_PDS_HOST).';
-            feedback.classList.add('al-signin-feedback--warn');
-            return;
-          }
-          globalThis.sessionStorage.setItem(
-            ATDANCE_OAUTH_POST_LOGIN_NAV_KEY,
-            `${window.location.pathname}${window.location.search}`,
-          );
-          await client.signInRedirect(h, {
-            redirect_uri: canonicalOAuthAppRootRedirectUri(
-              window.location,
-            ) as AuthorizeOptions['redirect_uri'],
-          });
-        } catch (e) {
-          feedback.textContent = formatAtprotoSignInErrorMessage(e);
-          feedback.classList.add('al-signin-feedback--warn');
-          console.error('[admin] OAuth sign-in', e);
-        } finally {
-          btn.disabled = false;
-        }
-      })();
-    };
-    btn.addEventListener('click', doSignIn);
-    input.addEventListener('keydown', (ev) => {
-      if (ev.key !== 'Enter') {
+  const feedback = el('p', {
+    class: 'al-muted al-signin-feedback',
+    role: 'status',
+  }) as HTMLParagraphElement;
+  const pwInput = el('input', {
+    type: 'password',
+    class: 'al-input',
+    placeholder: 'Admin password',
+    autocomplete: 'current-password',
+  }) as HTMLInputElement;
+  const btn = el('button', { type: 'button', class: 'al-btn al-btn--primary' }, [
+    'Sign in',
+  ]) as HTMLButtonElement;
+  const submit = (): void => {
+    void (async () => {
+      feedback.textContent = '';
+      feedback.classList.remove('al-signin-feedback--warn');
+      const password = pwInput.value;
+      if (password === '') {
+        feedback.textContent = 'Enter the admin password.';
+        feedback.classList.add('al-signin-feedback--warn');
         return;
       }
-      ev.preventDefault();
-      doSignIn();
-    });
-
-    const opSep = el('p', { class: 'al-muted' }, [
-      'Or use a relay operator token (same secret as Worker ATDANCE_ADMIN_API_TOKEN). Stored in this browser tab only.',
-    ]);
-    const opInput = el('input', {
-      type: 'password',
-      class: 'al-input',
-      placeholder: 'ATDANCE_ADMIN_API_TOKEN',
-      autocomplete: 'off',
-    }) as HTMLInputElement;
-    const opFeedback = el('p', {
-      class: 'al-muted al-signin-feedback',
-      role: 'status',
-    }) as HTMLParagraphElement;
-    const opBtn = el('button', { type: 'button', class: 'al-btn' }, [
-      'Save operator token',
-    ]) as HTMLButtonElement;
-    opBtn.addEventListener('click', () => {
-      const raw = opInput.value.trim();
-      if (raw === '') {
-        opFeedback.textContent = 'Paste the token from wrangler secret.';
-        opFeedback.classList.add('al-signin-feedback--warn');
-        return;
-      }
+      btn.disabled = true;
+      feedback.textContent = 'Signing in…';
       try {
-        globalThis.sessionStorage.setItem(ATDANCE_RELAY_ADMIN_TOKEN_SESSION_KEY, raw);
-        opFeedback.textContent = '';
+        const res = await postAdminPasswordLogin(origin, password);
+        if (!res.ok) {
+          feedback.textContent = res.message;
+          feedback.classList.add('al-signin-feedback--warn');
+          return;
+        }
+        globalThis.sessionStorage.setItem(ATDANCE_RELAY_ADMIN_SESSION_JWT_KEY, res.access_token);
         window.location.reload();
       } catch (e) {
-        opFeedback.textContent = e instanceof Error ? e.message : 'Could not store token.';
-        opFeedback.classList.add('al-signin-feedback--warn');
+        feedback.textContent = e instanceof Error ? e.message : 'Sign-in failed.';
+        feedback.classList.add('al-signin-feedback--warn');
+      } finally {
+        btn.disabled = false;
       }
-    });
-
-    appendNodes(box, [st, feedback, input, btn, opSep, opInput, opFeedback, opBtn]);
-    root.appendChild(box);
-    return;
-  }
-
-  if (!operatorTokenActive) {
-    const adminDid = await resolveAtHandleToDid(ADMIN_UI_HANDLE);
-    if (adminDid === null) {
-      const err = el('div', { class: 'al-card al-error' });
-      appendNodes(err, [
-        el('p', {}, [
-          `Could not resolve @${ADMIN_UI_HANDLE} to a DID (directory unavailable or handle not found).`,
-        ]),
-      ]);
-      root.appendChild(err);
-      return;
+    })();
+  };
+  btn.addEventListener('click', submit);
+  pwInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      submit();
     }
+  });
+  appendNodes(box, [pwInput, feedback, btn]);
+  root.appendChild(box);
+}
 
-    if (session !== null && session.sub !== adminDid) {
-      const handle = await fetchBskyHandleForDid(session.sub);
-      const denied = el('div', { class: 'al-card al-error' });
-      appendNodes(denied, [
-        el('p', {}, [
-          `You’re signed in as @${handle ?? session.sub}. This account can’t change the guest list. If you need access, contact whoever runs this deployment.`,
-        ]),
-      ]);
-      const signOutBtn = el('button', { type: 'button', class: 'al-btn' }, [
-        'Sign out',
-      ]) as HTMLButtonElement;
-      signOutBtn.addEventListener('click', () => {
-        void signOutAtprotoSession().then(() => window.location.reload());
-      });
-      denied.appendChild(signOutBtn);
-      root.appendChild(denied);
-      return;
-    }
-  }
-
+async function mountAdminShell(root: HTMLElement): Promise<void> {
   const shell = el('div', { class: 'al-shell' });
+  const sessionRow = el('div', { class: 'al-card al-token-banner' });
+  const signOutBtn = el('button', { type: 'button', class: 'al-btn' }, [
+    'Sign out',
+  ]) as HTMLButtonElement;
+  signOutBtn.addEventListener('click', () => {
+    try {
+      globalThis.sessionStorage.removeItem(ATDANCE_RELAY_ADMIN_SESSION_JWT_KEY);
+    } catch {
+      /* ignore */
+    }
+    window.location.reload();
+  });
+  appendNodes(sessionRow, [
+    el('p', { class: 'al-muted' }, [
+      'Signed in to relay admin. Sign out on shared devices when finished.',
+    ]),
+    signOutBtn,
+  ]);
+  shell.appendChild(sessionRow);
+
   const status = el('p', { class: 'al-muted' }, ['']);
   const tableHost = el('div', {});
-
-  if (operatorTokenActive) {
-    const tokRow = el('div', { class: 'al-card al-token-banner' });
-    const clearTok = el('button', { type: 'button', class: 'al-btn' }, [
-      'Clear operator token',
-    ]) as HTMLButtonElement;
-    clearTok.addEventListener('click', () => {
-      try {
-        globalThis.sessionStorage.removeItem(ATDANCE_RELAY_ADMIN_TOKEN_SESSION_KEY);
-      } catch {
-        /* ignore */
-      }
-      window.location.reload();
-    });
-    appendNodes(tokRow, [
-      el('p', { class: 'al-muted' }, [
-        'Admin API: relay operator token (not OAuth). Clear before leaving this browser if others use it.',
-      ]),
-      clearTok,
-    ]);
-    shell.appendChild(tokRow);
-  }
 
   const addRow = el('div', { class: 'al-add' });
   const input = el('input', {
@@ -491,4 +436,44 @@ export async function mountAdminApp(root: HTMLElement): Promise<void> {
   root.appendChild(shell);
 
   await loadList(tableHost, status);
+}
+
+export async function mountAdminApp(root: HTMLElement): Promise<void> {
+  appendNodes(root, [
+    el('h1', {}, ['ATDance']),
+    el('p', { class: 'al-muted' }, [
+      'Invite-only guest list for this game. If you opened this link by accident, you can close the tab or go back to the game—nothing here is required to play.',
+    ]),
+  ]);
+
+  const origin = relayOrigin();
+  if (origin === null) {
+    const err = el('div', { class: 'al-card al-error' });
+    appendNodes(err, [
+      el('p', {}, [
+        'This page needs a relay URL (set VITE_RELAY_HTTP or VITE_RELAY_WS in the app build).',
+      ]),
+    ]);
+    root.appendChild(err);
+    return;
+  }
+
+  const { passwordLogin } = await fetchAdminSessionOptions(origin);
+  if (!passwordLogin) {
+    const err = el('div', { class: 'al-card al-error' });
+    appendNodes(err, [
+      el('p', {}, [
+        'Browser admin sign-in is not enabled on this relay yet. The operator must set ATDANCE_ADMIN_PASSWORD and ATDANCE_ADMIN_SESSION_SECRET (see relay deployment docs), then redeploy.',
+      ]),
+    ]);
+    root.appendChild(err);
+    return;
+  }
+
+  if (getStoredAdminSessionJwt() === null) {
+    mountPasswordForm(root, origin);
+    return;
+  }
+
+  await mountAdminShell(root);
 }

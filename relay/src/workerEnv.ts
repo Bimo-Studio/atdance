@@ -21,4 +21,11 @@ export interface RelayWorkerEnv {
   readonly ATDANCE_OAUTH_AS_JWKS_JSON?: string;
   /** Optional: `Authorization: Bearer <token>` for admin HTTP (curl) when OAuth JWKS is unusable. */
   readonly ATDANCE_ADMIN_API_TOKEN?: string;
+  /**
+   * Human-chosen admin password for browser sign-in (`POST /admin/session/v1/login`).
+   * Not sent on every request; exchanged for a short-lived HS256 session JWT.
+   */
+  readonly ATDANCE_ADMIN_PASSWORD?: string;
+  /** Secret for signing admin session JWTs (use a long random string; independent of the password). */
+  readonly ATDANCE_ADMIN_SESSION_SECRET?: string;
 }

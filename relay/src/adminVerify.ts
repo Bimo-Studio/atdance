@@ -16,7 +16,14 @@ export type AdminVerifyEnv = {
    * Use when the OAuth AS publishes an empty JWKS (browser admin UI still uses DPoP JWTs; use curl/scripts with this bearer).
    */
   readonly ATDANCE_ADMIN_API_TOKEN?: string;
+  /** Browser admin: checked at `POST /admin/session/v1/login`; exchanged for a session JWT. */
+  readonly ATDANCE_ADMIN_PASSWORD?: string;
+  /** HMAC secret for admin session JWTs (HS256). */
+  readonly ATDANCE_ADMIN_SESSION_SECRET?: string;
 };
+
+const ADMIN_SESSION_ISSUER = 'atdance-relay';
+const ADMIN_SESSION_AUDIENCE = 'atdance-relay-admin';
 
 export function adminHandleFromEnv(env: { readonly ATDANCE_ADMIN_HANDLE?: string }): string {
   const h = env.ATDANCE_ADMIN_HANDLE?.trim().toLowerCase();
@@ -28,7 +35,7 @@ function pinnedAdminDidFromEnv(env: AdminVerifyEnv): string | null {
   return raw !== undefined && raw !== '' && raw.startsWith('did:') ? raw : null;
 }
 
-/** UTF-8 byte comparison (constant time vs length). */
+/** Constant-time UTF-8 compare; used for admin password and API token checks. */
 function timingSafeEqualUtf8(a: string, b: string): boolean {
   const ea = new TextEncoder().encode(a);
   const eb = new TextEncoder().encode(b);
@@ -42,10 +49,61 @@ function timingSafeEqualUtf8(a: string, b: string): boolean {
   return x === 0;
 }
 
+/** True when `password` matches `ATDANCE_ADMIN_PASSWORD` (timing-safe for equal lengths). */
+export function verifyAdminPlainPassword(env: AdminVerifyEnv, password: string): boolean {
+  const expected = env.ATDANCE_ADMIN_PASSWORD?.trim();
+  if (expected === undefined || expected === '') {
+    return false;
+  }
+  return timingSafeEqualUtf8(password, expected);
+}
+
 /** Rough JWS compact-serialization shape (three non-empty segments). */
 function looksLikeCompactJwt(s: string): boolean {
   const parts = s.split('.');
   return parts.length === 3 && parts.every((p) => p.length > 0);
+}
+
+/**
+ * Mint a short-lived HS256 JWT for allowlist admin APIs after password login.
+ * Returns null if session secret is missing or admin DID cannot be resolved.
+ */
+export async function mintAdminSessionJwt(env: AdminVerifyEnv): Promise<string | null> {
+  const secret = env.ATDANCE_ADMIN_SESSION_SECRET?.trim();
+  if (secret === undefined || secret === '') {
+    return null;
+  }
+  const adminHandle = adminHandleFromEnv(env);
+  const want = adminHandle.toLowerCase().replace(/^@/, '');
+  const adminDid = pinnedAdminDidFromEnv(env) ?? (await resolveAtHandleToDid(want));
+  if (adminDid == null || adminDid === '') {
+    return null;
+  }
+  const key = new TextEncoder().encode(secret);
+  return new jose.SignJWT({})
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(adminDid)
+    .setIssuer(ADMIN_SESSION_ISSUER)
+    .setAudience(ADMIN_SESSION_AUDIENCE)
+    .setIssuedAt()
+    .setExpirationTime('4h')
+    .sign(key);
+}
+
+function looksLikeAdminSessionToken(token: string): boolean {
+  if (!looksLikeCompactJwt(token)) {
+    return false;
+  }
+  try {
+    const h = jose.decodeProtectedHeader(token);
+    if (h.alg !== 'HS256') {
+      return false;
+    }
+    const p = jose.decodeJwt(token) as { iss?: unknown };
+    return p.iss === ADMIN_SESSION_ISSUER;
+  } catch {
+    return false;
+  }
 }
 
 function issuerCandidates(issFromJwt: string, asIssuerFromMetadata: string): string[] {
@@ -169,6 +227,44 @@ export type VerifyRelayAdminTokenResult =
   | { ok: true; sub: string }
   | { ok: false; reason: string; details?: { token_sub: string; expected_did: string } };
 
+async function verifyAdminSessionAccessToken(
+  accessToken: string,
+  env: AdminVerifyEnv,
+): Promise<VerifyRelayAdminTokenResult> {
+  const secret = env.ATDANCE_ADMIN_SESSION_SECRET?.trim();
+  if (secret === undefined || secret === '') {
+    return { ok: false, reason: 'session_unconfigured' };
+  }
+  try {
+    const key = new TextEncoder().encode(secret);
+    const { payload } = await jose.jwtVerify(accessToken, key, {
+      algorithms: ['HS256'],
+      issuer: ADMIN_SESSION_ISSUER,
+      audience: ADMIN_SESSION_AUDIENCE,
+      clockTolerance: 120,
+    });
+    if (typeof payload.sub !== 'string' || !payload.sub.startsWith('did:')) {
+      return { ok: false, reason: 'sub' };
+    }
+    const adminHandle = adminHandleFromEnv(env);
+    const want = adminHandle.toLowerCase().replace(/^@/, '');
+    const adminDid = pinnedAdminDidFromEnv(env) ?? (await resolveAtHandleToDid(want));
+    if (adminDid == null || adminDid === '') {
+      return { ok: false, reason: 'admin_handle' };
+    }
+    if (payload.sub !== adminDid) {
+      return {
+        ok: false,
+        reason: 'forbidden',
+        details: { token_sub: payload.sub, expected_did: adminDid },
+      };
+    }
+    return { ok: true, sub: payload.sub };
+  } catch {
+    return { ok: false, reason: 'jwt_verify' };
+  }
+}
+
 export async function verifyRelayAdminAccessToken(
   accessToken: string,
   env: AdminVerifyEnv,
@@ -255,6 +351,19 @@ export async function requireAdminBearer(
     return { ok: false, status: 401, reason: 'missing_bearer' };
   }
   const token = m[1]!.trim();
+  const sessionSecret = env.ATDANCE_ADMIN_SESSION_SECRET?.trim();
+  if (sessionSecret !== undefined && sessionSecret !== '' && looksLikeAdminSessionToken(token)) {
+    const s = await verifyAdminSessionAccessToken(token, env);
+    if (s.ok) {
+      return { ok: true, sub: s.sub };
+    }
+    return {
+      ok: false,
+      status: 403,
+      reason: s.reason,
+      ...(s.details !== undefined ? { details: s.details } : {}),
+    };
+  }
   const v = await verifyRelayAdminAccessToken(token, env);
   if (!v.ok) {
     return {

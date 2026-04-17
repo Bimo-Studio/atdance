@@ -16,11 +16,11 @@ ATDANCE_ADMIN_HANDLE = "distributed.camp"
 # Optional: pin admin DID if handle resolution and OAuth sub must match exactly (set in dashboard if needed).
 # ATDANCE_ADMIN_DID = "did:plc:…"
 #
-# If your OAuth AS publishes an empty JWKS at metadata jwks_uri (bsky.social/oauth/jwks returns {"keys":[]}
-# as of 2026-04), JWT admin auth cannot verify until you set one of:
-#   ATDANCE_OAUTH_AS_JWKS_URL — alternate JWKS URL, or
-#   ATDANCE_OAUTH_AS_JWKS_JSON — inline {"keys":[...]} (rotate when the AS rotates signing keys).
-# Or ATDANCE_ADMIN_API_TOKEN (Wrangler secret) + curl: Authorization: Bearer <token> on /admin/* (browser UI still needs JWKS or token UX).
+# Browser /admin sign-in: set Wrangler secrets ATDANCE_ADMIN_PASSWORD (operator-chosen) and
+# ATDANCE_ADMIN_SESSION_SECRET (long random; signs short-lived session JWTs after password login).
+# Optional: ATDANCE_ADMIN_API_TOKEN for scripts/curl only (Bearer on /admin/*).
+# OAuth JWT admin still works when the AS publishes a non-empty JWKS; otherwise use password login or JWKS overrides:
+#   ATDANCE_OAUTH_AS_JWKS_URL or ATDANCE_OAUTH_AS_JWKS_JSON
 
 # Live allowlist edits (KV created in Cloudflare; binding name must stay ALLOWLIST_KV).
 [[kv_namespaces]]

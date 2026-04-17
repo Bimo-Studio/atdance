@@ -1,4 +1,9 @@
-import { adminHandleFromEnv, requireAdminBearer } from './adminVerify';
+import {
+  adminHandleFromEnv,
+  mintAdminSessionJwt,
+  requireAdminBearer,
+  verifyAdminPlainPassword,
+} from './adminVerify';
 import {
   adminAddEntry,
   adminRemoveDid,
@@ -97,6 +102,42 @@ export async function handleRelayHttp(request: Request, env: RelayWorkerEnv): Pr
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: cors });
+  }
+
+  if (path === '/admin/session/v1/options' && request.method === 'GET') {
+    const raw = env.ATDANCE_ADMIN_PASSWORD?.trim() ?? '';
+    return json({ passwordLogin: raw !== '' }, 200, cors);
+  }
+
+  if (path === '/admin/session/v1/login' && request.method === 'POST') {
+    const pwdConfigured = (env.ATDANCE_ADMIN_PASSWORD?.trim() ?? '') !== '';
+    if (!pwdConfigured) {
+      return json({ error: 'admin_login_unconfigured' }, 503, cors);
+    }
+    const sessSecret = env.ATDANCE_ADMIN_SESSION_SECRET?.trim() ?? '';
+    if (sessSecret === '') {
+      return json({ error: 'admin_session_secret_unconfigured' }, 503, cors);
+    }
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: 'bad_json' }, 400, cors);
+    }
+    const password =
+      typeof body === 'object' &&
+      body !== null &&
+      typeof (body as { password?: string }).password === 'string'
+        ? (body as { password: string }).password
+        : '';
+    if (!verifyAdminPlainPassword(env, password)) {
+      return json({ error: 'invalid_credentials' }, 401, cors);
+    }
+    const accessToken = await mintAdminSessionJwt(env);
+    if (accessToken === null) {
+      return json({ error: 'admin_session_mint_failed' }, 503, cors);
+    }
+    return json({ access_token: accessToken, token_type: 'Bearer', expires_in: 14_400 }, 200, cors);
   }
 
   if (path === '/allowlist/v1/check' && request.method === 'GET') {

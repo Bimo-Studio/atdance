@@ -48,6 +48,11 @@ body {
   margin-top: 20px;
 }
 
+.al-token-setup-lead {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
 .al-add {
   display: flex;
   flex-wrap: wrap;
