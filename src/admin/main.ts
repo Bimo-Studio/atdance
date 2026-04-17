@@ -81,8 +81,10 @@ function adminAuthReasonUserHint(reason: string): string {
     case 'jwt_verify':
     case 'invalid_token':
       return 'The access token could not be verified (try Sign out, then sign in again).';
+    case 'admin_api_token_mismatch':
+      return 'Authorization Bearer does not match Worker secret ATDANCE_ADMIN_API_TOKEN (re-run wrangler secret put; same string as in curl).';
     case 'jwks_empty':
-      return 'Your OAuth server’s published JWKS has no public keys (relay operator: set ATDANCE_OAUTH_AS_JWKS_JSON or ATDANCE_OAUTH_AS_JWKS_URL).';
+      return 'Your OAuth server’s published JWKS has no public keys. Operator: set ATDANCE_OAUTH_AS_JWKS_JSON / _URL, or ATDANCE_ADMIN_API_TOKEN and use curl for /admin APIs until JWKS works.';
     case 'issuer_metadata':
     case 'jwks':
       return 'The relay could not load your OAuth server’s signing keys (check issuer reachability).';

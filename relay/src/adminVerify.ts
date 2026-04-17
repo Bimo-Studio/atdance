@@ -11,6 +11,11 @@ export type AdminVerifyEnv = {
   readonly ATDANCE_ADMIN_DID?: string;
   readonly ATDANCE_OAUTH_AS_JWKS_URL?: string;
   readonly ATDANCE_OAUTH_AS_JWKS_JSON?: string;
+  /**
+   * Optional shared secret: `Authorization: Bearer <this>` grants admin (same DID as handle/env pin).
+   * Use when the OAuth AS publishes an empty JWKS (browser admin UI still uses DPoP JWTs; use curl/scripts with this bearer).
+   */
+  readonly ATDANCE_ADMIN_API_TOKEN?: string;
 };
 
 export function adminHandleFromEnv(env: { readonly ATDANCE_ADMIN_HANDLE?: string }): string {
@@ -21,6 +26,26 @@ export function adminHandleFromEnv(env: { readonly ATDANCE_ADMIN_HANDLE?: string
 function pinnedAdminDidFromEnv(env: AdminVerifyEnv): string | null {
   const raw = env.ATDANCE_ADMIN_DID?.trim();
   return raw !== undefined && raw !== '' && raw.startsWith('did:') ? raw : null;
+}
+
+/** UTF-8 byte comparison (constant time vs length). */
+function timingSafeEqualUtf8(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  if (ea.length !== eb.length) {
+    return false;
+  }
+  let x = 0;
+  for (let i = 0; i < ea.length; i++) {
+    x |= ea[i]! ^ eb[i]!;
+  }
+  return x === 0;
+}
+
+/** Rough JWS compact-serialization shape (three non-empty segments). */
+function looksLikeCompactJwt(s: string): boolean {
+  const parts = s.split('.');
+  return parts.length === 3 && parts.every((p) => p.length > 0);
 }
 
 function issuerCandidates(issFromJwt: string, asIssuerFromMetadata: string): string[] {
@@ -206,6 +231,25 @@ export async function requireAdminBearer(
   env: AdminVerifyEnv,
 ): Promise<{ ok: true; sub: string } | AdminBearerFailure> {
   const auth = request.headers.get('Authorization') ?? '';
+  const apiTok = env.ATDANCE_ADMIN_API_TOKEN?.trim();
+  if (apiTok !== undefined && apiTok !== '') {
+    const be = /^Bearer\s+(.+)$/i.exec(auth.trim());
+    if (be !== null) {
+      const bearerSecret = be[1]!.trim();
+      if (timingSafeEqualUtf8(bearerSecret, apiTok)) {
+        const want = adminHandleFromEnv(env);
+        const adminDid = pinnedAdminDidFromEnv(env) ?? (await resolveAtHandleToDid(want));
+        if (adminDid == null || adminDid === '') {
+          return { ok: false, status: 403, reason: 'admin_handle' };
+        }
+        return { ok: true, sub: adminDid };
+      }
+      // Opaque operator token typo: do not run JWT verify (would surface as jwt_verify).
+      if (!looksLikeCompactJwt(bearerSecret)) {
+        return { ok: false, status: 403, reason: 'admin_api_token_mismatch' };
+      }
+    }
+  }
   const m = /^(?:Bearer|DPoP)\s+(.+)$/i.exec(auth);
   if (m === null) {
     return { ok: false, status: 401, reason: 'missing_bearer' };

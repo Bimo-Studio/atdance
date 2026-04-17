@@ -19,4 +19,6 @@ export interface RelayWorkerEnv {
    * Prefer rotating this secret when the AS rotates signing keys.
    */
   readonly ATDANCE_OAUTH_AS_JWKS_JSON?: string;
+  /** Optional: `Authorization: Bearer <token>` for admin HTTP (curl) when OAuth JWKS is unusable. */
+  readonly ATDANCE_ADMIN_API_TOKEN?: string;
 }

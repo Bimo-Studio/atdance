@@ -312,4 +312,44 @@ describe('requireAdminBearer', () => {
       details: { token_sub: 'did:plc:me', expected_did: 'did:plc:other' },
     });
   });
+
+  it('accepts Bearer matching ATDANCE_ADMIN_API_TOKEN (no JWT verify)', async () => {
+    hoisted.mockJwtVerify.mockClear();
+    vi.mocked(resolveAtHandleToDid).mockResolvedValue('did:plc:admin');
+    const req = new Request('https://x/admin', {
+      headers: { Authorization: 'Bearer secret-op-token' },
+    });
+    await expect(
+      requireAdminBearer(req, { ATDANCE_ADMIN_API_TOKEN: 'secret-op-token' }),
+    ).resolves.toEqual({ ok: true, sub: 'did:plc:admin' });
+    expect(hoisted.mockJwtVerify).not.toHaveBeenCalled();
+  });
+
+  it('uses ATDANCE_ADMIN_DID when API token matches (skips handle resolve)', async () => {
+    const req = new Request('https://x/admin', {
+      headers: { Authorization: 'Bearer t' },
+    });
+    await expect(
+      requireAdminBearer(req, {
+        ATDANCE_ADMIN_API_TOKEN: 't',
+        ATDANCE_ADMIN_DID: 'did:plc:pinned',
+      }),
+    ).resolves.toEqual({ ok: true, sub: 'did:plc:pinned' });
+    expect(resolveAtHandleToDid).not.toHaveBeenCalled();
+  });
+
+  it('returns admin_api_token_mismatch when Bearer is opaque and does not match API token', async () => {
+    hoisted.mockJwtVerify.mockClear();
+    const req = new Request('https://x/admin', {
+      headers: { Authorization: 'Bearer wrong-opaque' },
+    });
+    await expect(
+      requireAdminBearer(req, { ATDANCE_ADMIN_API_TOKEN: 'expected-secret' }),
+    ).resolves.toEqual({
+      ok: false,
+      status: 403,
+      reason: 'admin_api_token_mismatch',
+    });
+    expect(hoisted.mockJwtVerify).not.toHaveBeenCalled();
+  });
 });
