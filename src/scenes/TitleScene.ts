@@ -117,6 +117,7 @@ export class TitleScene extends Phaser.Scene {
     addNavBtn('Magnet library — M', 'MagnetLibraryScene');
     addNavBtn('PvP lobby — P', 'PvpLobbyScene');
     addNavBtn('Build info — I', 'InfoScene', { backSceneKey: 'TitleScene' });
+    addNavBtn('Acknowledgements — A', 'AcknowledgementsScene', { backSceneKey: 'TitleScene' });
     addNavBtn('Calibration — C', 'CalibrationScene');
     addNavBtn('Sync lab — T', 'SyncLabScene');
 
@@ -153,6 +154,9 @@ export class TitleScene extends Phaser.Scene {
       }
       if (ev.code === 'KeyT') {
         this.scene.start('SyncLabScene');
+      }
+      if (ev.code === 'KeyA') {
+        this.scene.start('AcknowledgementsScene', { backSceneKey: 'TitleScene' });
       }
     };
     this.input.keyboard?.on('keydown', onKeyNav);

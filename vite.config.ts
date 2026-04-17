@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 import { defineConfig, type Plugin } from 'vite';
@@ -6,6 +7,12 @@ import { defineConfig, type Plugin } from 'vite';
 import { oauthClientMetadataObject } from './src/auth/oauthClientMetadata';
 import { resolveBuildGitSha } from './src/build/resolveBuildGitSha';
 import { viteAdminIndexRewrite } from './src/build/viteAdminIndexRewrite';
+import { syncAcknowledgementsAssets } from './scripts/syncAcknowledgementsAssets';
+
+const timidityFreepatsCfg = readFileSync(
+  fileURLToPath(new URL('./node_modules/timidity/freepats.cfg', import.meta.url)),
+  'utf8',
+);
 
 function tryGitRevShort(): string | undefined {
   try {
@@ -55,6 +62,46 @@ function adminRouteDevPlugin(): Plugin {
   };
 }
 
+function acknowledgementsAssetsPlugin(): Plugin {
+  return {
+    name: 'atdance-sync-acknowledgements-assets',
+    buildStart() {
+      syncAcknowledgementsAssets();
+    },
+  };
+}
+
+/** timidity expects brfs to inline `freepats.cfg`; Vite inlines it here instead. */
+function timidityInlineFreepatsPlugin(): Plugin {
+  const inlined = `const TIMIDITY_CFG = ${JSON.stringify(timidityFreepatsCfg)}`;
+  return {
+    name: 'atdance-timidity-inline-freepats',
+    enforce: 'pre',
+    transform(code, id) {
+      const norm = id.replace(/\\/g, '/');
+      if (!norm.includes('/node_modules/timidity/') || !norm.endsWith('/index.js')) {
+        return null;
+      }
+      if (!code.includes('TIMIDITY_CFG')) {
+        return null;
+      }
+      let next = code.replace("const fs = require('fs')\n", '');
+      next = next.replace(
+        `// Inlined at build time by 'brfs' browserify transform
+const TIMIDITY_CFG = fs.readFileSync(
+  __dirname + '/freepats.cfg', // eslint-disable-line node/no-path-concat
+  'utf8'
+)`,
+        inlined,
+      );
+      if (next.includes('fs.readFileSync')) {
+        throw new Error('atdance-timidity-inline-freepats: failed to inline timidity freepats.cfg');
+      }
+      return next;
+    },
+  };
+}
+
 function oauthClientMetadataPlugin(): Plugin {
   return {
     name: 'atdance-oauth-client-metadata',
@@ -100,6 +147,8 @@ export default defineConfig({
     __APP_GIT_SHA__: JSON.stringify(buildGitSha),
   },
   plugins: [
+    acknowledgementsAssetsPlugin(),
+    timidityInlineFreepatsPlugin(),
     adminRouteDevPlugin(),
     oauthClientMetadataPlugin(),
     {
@@ -118,8 +167,11 @@ export default defineConfig({
   optimizeDeps: {
     // `webtorrent` is aliased to the prebuilt `min.js` — do not list
     // `webtorrent/dist/...` here (Vite 6 + Node 24 can double-resolve to ENOTDIR).
-    include: ['buffer', 'hyperswarm-web'],
-    exclude: ['webtorrent'],
+    include: ['buffer', 'hyperswarm-web', 'debug', 'events'],
+    // `timidity` must NOT be pre-bundled: esbuild skips our `timidityInlineFreepatsPlugin`
+    // (deps land in `.vite/deps/timidity.js`, not `timidity/index.js`), so `freepats.cfg`
+    // would never be inlined and `fs.readFileSync` breaks in the browser.
+    exclude: ['webtorrent', 'timidity'],
   },
   server: {
     /** IPv4 loopback so `curl http://127.0.0.1:<port>` and ATProto OAuth callbacks match `redirect_uri`. */

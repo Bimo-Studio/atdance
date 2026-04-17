@@ -8,9 +8,15 @@ import { getCalibrationOffsetSec } from '@/calibration/storage';
 import { MINIMAL_DANCE_CHART } from '@/chart/fixtures/minimal';
 import { buildNoteTimeline } from '@/chart/dance/buildTimeline';
 import { parseDanceFile } from '@/chart/dance/parseDance';
-import { arrowPointsForLane } from '@/game/arrowPolygon';
 import { DEFAULT_RENDER_OPTIONS } from '@/game/buildRenderPlan';
-import { buildLaneNotesFromEvents, type LaneIndex, type LaneNote } from '@/game/laneNotes';
+import {
+  playArrowSparkTextureKey,
+  playArrowTextureKey,
+  playColorCueTextureKey,
+  preloadPlayArrowTextures,
+} from '@/game/playArrowAssets';
+import { buildLaneNotesFromEvents, type LaneNote } from '@/game/laneNotes';
+import type { LaneIndex } from '@/game/types';
 import { isMissLateBeat, rateBeatJudge } from '@/judge/beatJudge';
 import { isMissLate, rateTimeJudge, type JudgmentGrade, type TimeGrade } from '@/judge/timeJudge';
 import { msUntilWallUnixMs, pvpSongTimeAlignment } from '@/play/pvpAudioAlignment';
@@ -19,18 +25,17 @@ import type { PlaySceneData } from '@/play/playSceneData';
 import { dancePointsIncrement, summarizeDancePoints } from '@/scoring/dancePoints';
 import { buildPlayKey, getLocalBest, saveLocalBestIfBetter } from '@/scores/localBest';
 import { songIdFromPlaySceneData } from '@/songSelect/songIdFromPlayData';
+import { getColorCueModeEnabled } from '@/util/colorCueMode';
 import { isE2eMode, setE2ePvpPlayLayout, setE2eStatus } from '@/util/e2eFlags';
 import { directoryOfUrl } from '@/util/url';
 
 const JUDGESCALE = 1;
 const SCROLL_PX_PER_SEC = 280;
 const HIT_LINE_Y = 470;
-/** Scrolling note cues (same aspect as receptors, smaller). */
-const NOTE_W = 56;
-const NOTE_H = 28;
-/** Receptor “targets” on the hit line — slightly larger than scrolling cues. */
-const RECEPTOR_W = 68;
-const RECEPTOR_H = 38;
+/** Scrolling note sprite height (width follows texture aspect). */
+const NOTE_H = 56;
+/** Receptor sprite height on the hit line (width follows texture aspect). */
+const RECEPTOR_H = 76;
 
 const LANE_RECEPTOR_LABELS: readonly string[] = ['Left', 'Down', 'Up', 'Right'];
 
@@ -39,15 +44,10 @@ const AUTOSTART_SECONDS = 15;
 /** Hold Esc or Q this long to bail to song list (with on-screen countdown). */
 const EXIT_HOLD_MS = 5000;
 
-/** Muted slate + single cool accent — readable without rainbow panels. */
-const RECEPTOR_FILL = 0x243448;
-const RECEPTOR_FILL_ALPHA = 0.62;
-const RECEPTOR_STROKE = 0x7a9cbc;
-/** While the lane arrow key is held: invert fill/stroke so input registers before the hit. */
-const RECEPTOR_FILL_HELD = RECEPTOR_STROKE;
-const RECEPTOR_FILL_ALPHA_HELD = 0.9;
-const RECEPTOR_STROKE_HELD = RECEPTOR_FILL;
-const NOTE_FILL = 0x5a9fd0;
+/** Sprite tints (multiply on PNG arrows). */
+const RECEPTOR_TINT_IDLE = 0xb8c6d2;
+const RECEPTOR_TINT_HELD = 0xffffff;
+const NOTE_TINT = 0xc8d4de;
 
 const DEMO_CHART_URL = '/songs/synrg/synrg.dance';
 
@@ -79,61 +79,13 @@ function parseChartIndexFromUrl(): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
-function fillClosedPolygon(
-  g: Phaser.GameObjects.Graphics,
-  points: readonly { x: number; y: number }[],
-  fillColor: number,
-  fillAlpha: number,
-): void {
-  if (points.length < 3) {
-    return;
-  }
-  const p0 = points[0];
-  if (!p0) {
-    return;
-  }
-  g.fillStyle(fillColor, fillAlpha);
-  g.beginPath();
-  g.moveTo(p0.x, p0.y);
-  for (let i = 1; i < points.length; i += 1) {
-    const p = points[i];
-    if (p) {
-      g.lineTo(p.x, p.y);
-    }
-  }
-  g.closePath();
-  g.fillPath();
-}
-
-function strokeClosedPolygon(
-  g: Phaser.GameObjects.Graphics,
-  points: readonly { x: number; y: number }[],
-  lineWidth: number,
-  color: number,
-  alpha: number,
-): void {
-  if (points.length < 3) {
-    return;
-  }
-  const p0 = points[0];
-  if (!p0) {
-    return;
-  }
-  g.lineStyle(lineWidth, color, alpha);
-  g.beginPath();
-  g.moveTo(p0.x, p0.y);
-  for (let i = 1; i < points.length; i += 1) {
-    const p = points[i];
-    if (p) {
-      g.lineTo(p.x, p.y);
-    }
-  }
-  g.closePath();
-  g.strokePath();
-}
-
 export class PlayScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
+  /** Lane receptors on the hit line (PNG arrows). */
+  private receptorImages: Phaser.GameObjects.Image[] = [];
+  /** Pool reused each frame for scrolling note sprites. */
+  private noteImagePool: Phaser.GameObjects.Image[] = [];
+  private notePoolIndex = 0;
   private hud!: Phaser.GameObjects.Text;
   private hint!: Phaser.GameObjects.Text;
   /** PvP: opponent summary (G7 minimal strip). */
@@ -204,6 +156,10 @@ export class PlayScene extends Phaser.Scene {
     super({ key: 'PlayScene' });
   }
 
+  preload(): void {
+    preloadPlayArrowTextures(this);
+  }
+
   init(data?: PlaySceneData): void {
     this.playData = data ?? {};
   }
@@ -248,6 +204,25 @@ export class PlayScene extends Phaser.Scene {
     this.graphics = this.add.graphics();
     /** Above default (0) so lane labels / playfield paint is visible; HUD stays higher. */
     this.graphics.setDepth(10);
+
+    this.receptorImages = [];
+    for (let lane = 0; lane < 4; lane += 1) {
+      const cx = this.laneCenterX[lane];
+      if (cx === undefined) {
+        throw new Error('PlayScene: expected four lane centers');
+      }
+      const key = playArrowTextureKey(lane as LaneIndex, 0);
+      const img = this.add.image(cx, HIT_LINE_Y, key);
+      img.setOrigin(0.5, 0.5);
+      img.setDepth(12);
+      img.setScale(RECEPTOR_H / img.height);
+      img.setTint(RECEPTOR_TINT_IDLE);
+      this.receptorImages.push(img);
+    }
+
+    this.noteImagePool = [];
+    this.notePoolIndex = 0;
+    this.ensureNoteImagePool(56);
 
     const labelY = HIT_LINE_Y + RECEPTOR_H / 2 + 8;
     for (let i = 0; i < 4; i += 1) {
@@ -365,6 +340,32 @@ export class PlayScene extends Phaser.Scene {
       clearInterval(this.autostartIntervalId);
       this.autostartIntervalId = null;
     }
+  }
+
+  private ensureNoteImagePool(capacity: number): void {
+    while (this.noteImagePool.length < capacity) {
+      const img = this.add.image(-9999, -9999, playArrowTextureKey(0, 0));
+      img.setOrigin(0.5, 0.5);
+      img.setDepth(11);
+      img.setVisible(false);
+      this.noteImagePool.push(img);
+    }
+  }
+
+  private reuseNoteSprite(lane: LaneIndex, x: number, y: number, variant: number): void {
+    this.ensureNoteImagePool(this.notePoolIndex + 1);
+    const img = this.noteImagePool[this.notePoolIndex]!;
+    this.notePoolIndex += 1;
+    img.setVisible(true);
+    if (getColorCueModeEnabled()) {
+      img.setTexture(playColorCueTextureKey(lane, variant));
+      img.clearTint();
+    } else {
+      img.setTexture(playArrowTextureKey(lane, variant));
+      img.setTint(NOTE_TINT);
+    }
+    img.setPosition(x, y);
+    img.setScale(NOTE_H / img.height);
   }
 
   /** Pre-play countdown + instructions (skipped when PvP lobby already auto-starts audio). */
@@ -734,24 +735,30 @@ export class PlayScene extends Phaser.Scene {
 
     for (let lane = 0; lane < 4; lane += 1) {
       const cx = this.laneCenterX[lane];
-      if (cx === undefined) {
+      const img = this.receptorImages[lane];
+      if (cx === undefined || img === undefined) {
         continue;
       }
-      const pts = arrowPointsForLane(lane as LaneIndex, cx, HIT_LINE_Y, RECEPTOR_W, RECEPTOR_H);
+      img.setPosition(cx, HIT_LINE_Y);
       const laneKey = this.laneKeys[lane];
       const held = laneKey?.isDown ?? false;
-      const fill = held ? RECEPTOR_FILL_HELD : RECEPTOR_FILL;
-      const fillA = held ? RECEPTOR_FILL_ALPHA_HELD : RECEPTOR_FILL_ALPHA;
-      const stroke = held ? RECEPTOR_STROKE_HELD : RECEPTOR_STROKE;
-      const strokeA = held ? 1 : 0.92;
-      fillClosedPolygon(this.graphics, pts, fill, fillA);
-      strokeClosedPolygon(this.graphics, pts, 2, stroke, strokeA);
+      const variant = 0;
+      if (held) {
+        img.setTexture(playArrowSparkTextureKey(lane as LaneIndex, variant));
+        img.setTint(RECEPTOR_TINT_HELD);
+      } else {
+        img.setTexture(playArrowTextureKey(lane as LaneIndex, variant));
+        img.setTint(RECEPTOR_TINT_IDLE);
+      }
+      img.setScale(RECEPTOR_H / img.height);
     }
 
     for (const cx of this.laneCenterX) {
       this.graphics.lineStyle(1, 0x334455, 0.45);
       this.graphics.lineBetween(cx, 80, cx, this.scale.height - 20);
     }
+
+    this.notePoolIndex = 0;
     for (const n of this.notes) {
       if (n.state !== 'pending') {
         continue;
@@ -767,9 +774,11 @@ export class PlayScene extends Phaser.Scene {
       if (x === undefined) {
         continue;
       }
-      const notePts = arrowPointsForLane(n.lane, x, y, NOTE_W, NOTE_H);
-      fillClosedPolygon(this.graphics, notePts, NOTE_FILL, 1);
-      strokeClosedPolygon(this.graphics, notePts, 1, 0x2a4058, 0.85);
+      const variant = Math.abs(Math.floor(n.timeSec * 12 + n.lane * 5)) % 4;
+      this.reuseNoteSprite(n.lane, x, y, variant);
+    }
+    for (let i = this.notePoolIndex; i < this.noteImagePool.length; i += 1) {
+      this.noteImagePool[i]!.setVisible(false);
     }
 
     if (this.started && pending === 0 && t > this.lastNoteTimeSec + 0.75) {

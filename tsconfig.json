@@ -20,5 +20,12 @@
     },
     "types": ["vite/client", "@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "relay/**/*.ts", "vite.config.ts", "vitest.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "relay/**/*.ts",
+    "scripts/syncAcknowledgementsAssets.ts",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
 }

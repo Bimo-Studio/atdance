@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import type { EchoDuplex } from '@/p2p/p2pEchoHandshake';
 import { getAtprotoOAuthSession } from '@/auth/atprotoSession';
+import { fetchBskyHandleForDid } from '@/bsky/publicAppview';
 import { requirePlaySession } from '@/auth/requirePlaySession';
 import { agreeChartFromOffers, type ChartOfferInput } from '@/pvp/chartAgreement';
 import { agreeStartAtUnixMs } from '@/pvp/agreeStartTime';
@@ -28,6 +29,7 @@ import {
   setE2ePvpLobbyPhase,
   setE2ePvpProbeOutcome,
 } from '@/util/e2eFlags';
+import { formatAccountFooterLine } from '@/util/accountDisplay';
 import { getStorageDid } from '@/util/storageDid';
 
 /** Synthetic peer id for RTT probe when relay did not supply `peerPlayerDid` (solo / dev queue). */
@@ -75,6 +77,7 @@ export class PvpLobbyScene extends Phaser.Scene {
   private agreedChartUrl = '';
   /** When true, lobby hands off to PlayScene and must not close the relay socket. */
   private leavingForPvpPlay = false;
+  private accountFooter!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'PvpLobbyScene' });
@@ -178,18 +181,20 @@ export class PvpLobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.add
-      .text(
-        16,
-        this.scale.height - 28,
-        `Account: ${this.storageDid.length > 36 ? `${this.storageDid.slice(0, 28)}…` : this.storageDid}`,
-        {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '11px',
-          color: '#556677',
-        },
-      )
+    this.accountFooter = this.add
+      .text(16, this.scale.height - 28, formatAccountFooterLine(this.storageDid, null), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        color: '#556677',
+      })
       .setOrigin(0, 0.5);
+
+    void fetchBskyHandleForDid(this.storageDid).then((handle) => {
+      if (!this.accountFooter.active) {
+        return;
+      }
+      this.accountFooter.setText(formatAccountFooterLine(this.storageDid, handle));
+    });
 
     this.add
       .text(

@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 
 import { wireAtprotoSignInForm } from '@/scenes/signInFormDom';
+import { attachSignInMatrixRain } from '@/scenes/signInMatrixRain';
+import { preloadSignInRainAssets } from '@/scenes/signInRainAssets';
 
 /**
  * Required when no ATProto session (PRD P0). OAuth client aligns with Streamplace patterns.
@@ -10,7 +12,13 @@ export class SignInScene extends Phaser.Scene {
     super({ key: 'SignInScene' });
   }
 
+  preload(): void {
+    preloadSignInRainAssets(this);
+  }
+
   create(): void {
+    const detachRain = attachSignInMatrixRain(this);
+
     this.add
       .text(this.scale.width / 2, 120, 'Sign in to play', {
         fontFamily: 'system-ui, sans-serif',
@@ -18,20 +26,9 @@ export class SignInScene extends Phaser.Scene {
         color: '#e8e8f0',
         align: 'center',
       })
-      .setOrigin(0.5);
-    this.add
-      .text(
-        this.scale.width / 2,
-        200,
-        'ATProto OAuth — sessions stored in IndexedDB.\nSet VITE_ATPROTO_PDS_HOST in .env.local for your PDS.',
-        {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '15px',
-          color: '#8899aa',
-          align: 'center',
-        },
-      )
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(10)
+      .setShadow(0, 3, '#061208', 8, true, true);
 
     /** Fixed to `body` so Phaser’s canvas (full-game hit target) does not steal clicks from the form. */
     const host = document.body;
@@ -62,6 +59,7 @@ export class SignInScene extends Phaser.Scene {
     wrap.appendChild(row);
     host.appendChild(wrap);
     this.events.once('shutdown', () => {
+      detachRain();
       wrap.remove();
     });
   }

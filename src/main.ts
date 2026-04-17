@@ -16,6 +16,7 @@ if (!g.process) {
   };
 }
 
+import { AcknowledgementsScene } from '@/scenes/AcknowledgementsScene';
 import { BootScene } from '@/scenes/BootScene';
 import { CalibrationScene } from '@/scenes/CalibrationScene';
 import { InfoScene } from '@/scenes/InfoScene';
@@ -75,6 +76,7 @@ function startPhaserGame(): void {
       PvpLobbyScene,
       SongSelectScene,
       InfoScene,
+      AcknowledgementsScene,
       PlayScene,
       ResultsScene,
       CalibrationScene,

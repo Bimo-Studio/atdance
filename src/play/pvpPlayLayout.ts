@@ -5,6 +5,12 @@
  */
 export const DEFAULT_SOLO_LANE_CENTERS: readonly number[] = [120, 280, 440, 600];
 
+/**
+ * Fraction of the playfield span used for the four lanes (rest is empty margin on both sides).
+ * Lower = tighter column grouping, less horizontal eye travel.
+ */
+export const LANE_GROUP_WIDTH_RATIO = 0.52;
+
 export interface PlayfieldLayout {
   readonly laneCenters: readonly number[];
   /** Vertical separator x (canvas px); null when solo. */
@@ -22,8 +28,11 @@ export function playfieldLayoutForWidth(width: number, pvpOpponentPanel: boolean
   const baseMin = DEFAULT_SOLO_LANE_CENTERS[0]!;
   const baseMax = DEFAULT_SOLO_LANE_CENTERS[3]!;
   const baseSpan = baseMax - baseMin;
-  const laneCenters = DEFAULT_SOLO_LANE_CENTERS.map(
-    (x) => leftEdge + ((x - baseMin) / baseSpan) * span,
-  );
+  const mid = (leftEdge + playfieldRightX) / 2;
+  const groupWidth = span * LANE_GROUP_WIDTH_RATIO;
+  const laneCenters = DEFAULT_SOLO_LANE_CENTERS.map((x) => {
+    const t = baseSpan > 0 ? (x - baseMin) / baseSpan : 0;
+    return mid + (t - 0.5) * groupWidth;
+  });
   return { laneCenters, splitDividerX, playfieldRightX };
 }

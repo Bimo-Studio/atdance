@@ -115,6 +115,10 @@ The P2P module is **lazy-loaded** when you run the probe so the default relay bu
 - `docs/operator-runbook.md` — deploy, relay, OAuth rotation (Phase 5.3).
 - `docs/release-checklist.md` — pre-release and acceptance (Phase 5.4).
 
+## Acknowledgments
+
+- **[pydance](https://www.icculus.org/pyddr/)** (DDR-style game and `.dance` format) — the main **design reference** for this project’s chart timing (`toRealTime` / beat units), **note timeline** progression (stops, BPM), **TimeJudge** / **BeatJudge** windows, **Dance Points** grading, and panel digit semantics. See inline references in `src/chart/dance/`, `src/judge/`, and `src/scoring/dancePoints.ts`. Community mirrors exist on GitHub (e.g. forks of the historical tree); the behavior ATDance matches is that of the classic pydance/pyddr implementation.
+
 ## Layout
 
 - Root: `package.json`, Vite, ESLint, Prettier, Vitest

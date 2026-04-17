@@ -1,6 +1,11 @@
 import Phaser from 'phaser';
 
 import { buildInfoLines } from '@/buildInfo';
+import {
+  advanceKonamiProgress,
+  getColorCueModeEnabled,
+  setColorCueModeEnabled,
+} from '@/util/colorCueMode';
 
 export interface InfoSceneData {
   /** Scene key to return to (default TitleScene). */
@@ -12,6 +17,23 @@ export interface InfoSceneData {
  */
 export class InfoScene extends Phaser.Scene {
   private backSceneKey = 'TitleScene';
+  private konamiIndex = 0;
+
+  private readonly onKonamiKeydown = (ev: KeyboardEvent): void => {
+    if (ev.repeat) {
+      return;
+    }
+    const { nextIndex, unlocked } = advanceKonamiProgress(this.konamiIndex, ev.code);
+    this.konamiIndex = nextIndex;
+    if (unlocked) {
+      setColorCueModeEnabled(true);
+      this.colorModeBanner?.setText(
+        'Color note cues unlocked — scrolling arrows use primary colors. Persisted in this browser.',
+      );
+    }
+  };
+
+  private colorModeBanner: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'InfoScene' });
@@ -50,6 +72,20 @@ export class InfoScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0);
 
+    const colorHint = getColorCueModeEnabled()
+      ? 'Color note cues: on (primary-color scrolling arrows in play).'
+      : '';
+    this.colorModeBanner = this.add
+      .text(this.scale.width / 2, this.scale.height - 56, colorHint, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '13px',
+        color: '#8fbc8f',
+        align: 'center',
+      })
+      .setOrigin(0.5, 1);
+
+    window.addEventListener('keydown', this.onKonamiKeydown, true);
+
     const goBack = (): void => {
       this.scene.start(this.backSceneKey);
     };
@@ -60,5 +96,9 @@ export class InfoScene extends Phaser.Scene {
       goBack();
     });
     this.input.keyboard?.once('keydown-ESC', goBack);
+
+    this.events.once('shutdown', () => {
+      window.removeEventListener('keydown', this.onKonamiKeydown, true);
+    });
   }
 }
