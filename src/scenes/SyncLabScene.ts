@@ -15,6 +15,7 @@ import {
 import { randomTopicHex } from '@/p2p/randomTopic';
 import { isE2eMode, setE2eStatus } from '@/util/e2eFlags';
 import { syncLabP2pShareUrl } from '@/util/syncLabP2pShareUrl';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import { syncLabP2pTopicLabel, syncLabTransportMode } from '@/util/syncLabMode';
 
 function relayWsUrl(): string {
@@ -36,6 +37,7 @@ export class SyncLabScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     if (!requirePlaySession(this)) {
       return;
     }

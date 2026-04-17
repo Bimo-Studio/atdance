@@ -29,6 +29,7 @@ import {
   setE2ePvpLobbyPhase,
   setE2ePvpProbeOutcome,
 } from '@/util/e2eFlags';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import { formatAccountFooterLine } from '@/util/accountDisplay';
 import { getStorageDid } from '@/util/storageDid';
 
@@ -84,6 +85,7 @@ export class PvpLobbyScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     if (!requirePlaySession(this)) {
       return;
     }

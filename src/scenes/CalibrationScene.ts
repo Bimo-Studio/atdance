@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { requirePlaySession } from '@/auth/requirePlaySession';
 import { median } from '@/calibration/median';
 import { setCalibrationOffsetSec } from '@/calibration/storage';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 
 const BEATS = 8;
 /** 120 BPM quarter notes */
@@ -52,6 +53,7 @@ export class CalibrationScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     if (!requirePlaySession(this)) {
       return;
     }

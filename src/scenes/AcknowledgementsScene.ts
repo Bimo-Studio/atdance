@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
+
 export interface AcknowledgementsSceneData {
   backSceneKey?: string;
 }
@@ -106,6 +108,7 @@ export class AcknowledgementsScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     this.add
       .text(this.scale.width / 2, 28, 'Credits', {
         fontFamily: '"Press Start 2P", monospace',

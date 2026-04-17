@@ -3,18 +3,32 @@
  */
 const PUBLIC_API = 'https://public.api.bsky.app';
 
-export async function fetchBskyHandleForDid(did: string): Promise<string | null> {
+export interface BskyPublicProfile {
+  handle: string | null;
+  avatarUrl: string | null;
+}
+
+export async function fetchBskyPublicProfileForDid(did: string): Promise<BskyPublicProfile | null> {
   const url = new URL(`${PUBLIC_API}/xrpc/app.bsky.actor.getProfile`);
   url.searchParams.set('actor', did);
   const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!r.ok) {
     return null;
   }
-  const j = (await r.json()) as { handle?: string };
-  if (typeof j.handle !== 'string') {
-    return null;
-  }
-  return j.handle.toLowerCase();
+  const j = (await r.json()) as { handle?: string; avatar?: string };
+  const handle = typeof j.handle === 'string' ? j.handle.toLowerCase() : null;
+  const avatarUrl = typeof j.avatar === 'string' && j.avatar.startsWith('http') ? j.avatar : null;
+  return { handle, avatarUrl };
+}
+
+export async function fetchBskyAvatarUrlForDid(did: string): Promise<string | null> {
+  const p = await fetchBskyPublicProfileForDid(did);
+  return p?.avatarUrl ?? null;
+}
+
+export async function fetchBskyHandleForDid(did: string): Promise<string | null> {
+  const p = await fetchBskyPublicProfileForDid(did);
+  return p?.handle ?? null;
 }
 
 export async function resolveAtHandleToDid(handle: string): Promise<string | null> {

@@ -18,9 +18,10 @@ import {
   resolveAtHandleToDid,
   searchActorsTypeahead,
 } from '@/bsky/publicAppview';
+import { ATDANCE_OPERATOR_ADMIN_HANDLE } from '@/config/operatorAdminHandle';
 import { relayHttpOriginFromEnv } from '@/util/relayHttpOrigin';
 
-export const ADMIN_UI_HANDLE = 'distributed.camp';
+export const ADMIN_UI_HANDLE = ATDANCE_OPERATOR_ADMIN_HANDLE;
 
 /**
  * sessionStorage key for the same secret as Worker `ATDANCE_ADMIN_API_TOKEN`.
@@ -205,7 +206,12 @@ function renderTable(container: HTMLElement, entries: AllowlistEntry[]): void {
 }
 
 export async function mountAdminApp(root: HTMLElement): Promise<void> {
-  appendNodes(root, [el('h1', {}, ['ATDance allowlist'])]);
+  appendNodes(root, [
+    el('h1', {}, ['ATDance']),
+    el('p', { class: 'al-muted' }, [
+      'Invite-only guest list for this game. If you opened this link by accident, you can close the tab or go back to the game—nothing here is required to play.',
+    ]),
+  ]);
 
   await initAtprotoSessionOnBoot();
   const session = getAtprotoOAuthSession();
@@ -213,7 +219,9 @@ export async function mountAdminApp(root: HTMLElement): Promise<void> {
 
   if (!operatorTokenActive && (session === null || !session.sub.startsWith('did:'))) {
     const box = el('div', { class: 'al-card' });
-    const st = el('p', {}, ['Sign in with the same ATProto account you use in the game.']);
+    const st = el('p', {}, [
+      'Sign in with the same ATProto account you use in the game, or use an operator token if you run the relay.',
+    ]);
     const feedback = el('p', {
       class: 'al-muted al-signin-feedback',
       role: 'status',
@@ -329,7 +337,9 @@ export async function mountAdminApp(root: HTMLElement): Promise<void> {
       const handle = await fetchBskyHandleForDid(session.sub);
       const denied = el('div', { class: 'al-card al-error' });
       appendNodes(denied, [
-        el('p', {}, [`Signed in as @${handle ?? session.sub} — access denied.`]),
+        el('p', {}, [
+          `You’re signed in as @${handle ?? session.sub}. This account can’t change the guest list. If you need access, contact whoever runs this deployment.`,
+        ]),
       ]);
       const signOutBtn = el('button', { type: 'button', class: 'al-btn' }, [
         'Sign out',

@@ -27,6 +27,7 @@ import { buildPlayKey, getLocalBest, saveLocalBestIfBetter } from '@/scores/loca
 import { songIdFromPlaySceneData } from '@/songSelect/songIdFromPlayData';
 import { getColorCueModeEnabled } from '@/util/colorCueMode';
 import { isE2eMode, setE2ePvpPlayLayout, setE2eStatus } from '@/util/e2eFlags';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import { directoryOfUrl } from '@/util/url';
 
 const JUDGESCALE = 1;
@@ -172,6 +173,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     if (!requirePlaySession(this)) {
       return;
     }

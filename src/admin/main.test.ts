@@ -176,7 +176,7 @@ describe('mountAdminApp', () => {
     vi.mocked(fetchBskyHandleForDid).mockResolvedValue('other.bsky.social');
     const root = document.getElementById('root')!;
     await mountAdminApp(root);
-    expect(root.textContent).toContain('access denied');
+    expect(root.textContent).toMatch(/change the guest list/);
   });
 
   it('shows relay auth reason when allowlist GET returns 403 with JSON body', async () => {

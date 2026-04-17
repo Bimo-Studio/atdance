@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { requirePlaySession } from '@/auth/requirePlaySession';
 import type { MagnetEntry } from '@/pvp/magnetLibraryStore';
 import { loadMagnetLibrary, saveMagnetLibrary } from '@/pvp/magnetLibraryStore';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import { isE2eMode, setE2eMagnetHud, setE2eStatus } from '@/util/e2eFlags';
 import { getStorageDid } from '@/util/storageDid';
 
@@ -19,6 +20,7 @@ export class MagnetLibraryScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     if (!requirePlaySession(this)) {
       return;
     }

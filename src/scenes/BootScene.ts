@@ -5,6 +5,7 @@ import { isDevAuthBypass } from '@/auth/devAuthBypass';
 import { getAtprotoOAuthSession, initAtprotoSessionOnBoot } from '@/auth/atprotoSession';
 import { startInviteAllowlistWatcher } from '@/auth/inviteAllowlistWatch';
 import { markInviteRelayGatePassed } from '@/auth/inviteRelayGate';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import { isE2eMode, syncLabE2eFromSearch } from '@/util/e2eFlags';
 
 export class BootScene extends Phaser.Scene {
@@ -13,6 +14,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     // E2E: do not block on OAuth/IndexedDB — Playwright needs scenes + #e2e-status immediately.
     if (isE2eMode()) {
       if (syncLabE2eFromSearch(window.location.search)) {

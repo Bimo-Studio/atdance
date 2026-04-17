@@ -24,4 +24,6 @@ interface ImportMetaEnv {
   readonly VITE_SYNC_LAB_MODE?: string;
   /** When `1`, use P2P duplex for RTT probe when a socket is wired (P3.5b). */
   readonly VITE_PVP_P2P_PROBE?: string;
+  /** Operator handle for in-game Admin menu (default distributed.camp; match relay ATDANCE_ADMIN_HANDLE). */
+  readonly VITE_ATDANCE_OPERATOR_ADMIN_HANDLE?: string;
 }

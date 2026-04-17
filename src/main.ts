@@ -29,6 +29,7 @@ import { SongPrefsScene } from '@/scenes/SongPrefsScene';
 import { SongSelectScene } from '@/scenes/SongSelectScene';
 import { SyncLabScene } from '@/scenes/SyncLabScene';
 import { TitleScene } from '@/scenes/TitleScene';
+import { installAccountMenuHud } from '@/ui/accountMenuHud';
 import { loopbackUrlFromLocalhost } from '@/util/loopbackDevRedirect';
 
 if (import.meta.env.VITE_INVITE_ONLY === '1') {
@@ -55,6 +56,8 @@ function startPhaserGame(): void {
   if (!parent) {
     throw new Error('Missing #game-root');
   }
+
+  installAccountMenuHud();
 
   void new Phaser.Game({
     type: Phaser.AUTO,

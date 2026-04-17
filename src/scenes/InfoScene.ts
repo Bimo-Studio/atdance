@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { buildInfoLines } from '@/buildInfo';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import {
   advanceKonamiProgress,
   getColorCueModeEnabled,
@@ -44,6 +45,7 @@ export class InfoScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     this.add
       .text(this.scale.width / 2, 48, 'Build info', {
         fontFamily: 'system-ui, sans-serif',

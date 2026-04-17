@@ -1,5 +1,6 @@
 /**
  * ATProto OAuth client metadata (hosted at `client_id` URL) for non-loopback hosts.
+ * Player-facing explanation of how we use this is on the sign-in screen (`SignInScene`).
  * @see https://github.com/bluesky-social/atproto/blob/main/packages/oauth/oauth-client-browser/README.md
  */
 export function oauthClientMetadataObject(origin: string): Record<string, unknown> {

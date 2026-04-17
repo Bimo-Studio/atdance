@@ -5,6 +5,7 @@ import { getAtprotoOAuthSession } from '@/auth/atprotoSession';
 import { saveScoreWithAgent } from '@/atproto/saveScoreToPds';
 import { buildDanceScoreRecord, stableChartHash } from '@/lexicon/buildDanceScoreRecord';
 import type { ResultsSceneData } from '@/play/resultsSceneData';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import { ATDANCE_CLIENT_BUILD } from '@/version';
 
 export class ResultsScene extends Phaser.Scene {
@@ -19,6 +20,7 @@ export class ResultsScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     const d = this.payload;
     const summary = d?.summary;
     const label = d?.songLabel ?? 'Song';

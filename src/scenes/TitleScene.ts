@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { getAtprotoOAuthSession } from '@/auth/atprotoSession';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import { isE2eMode, setE2eStatus } from '@/util/e2eFlags';
 
 function formatDid(did: string): string {
@@ -34,6 +35,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     if (isE2eMode()) {
       setE2eStatus('title');
     }

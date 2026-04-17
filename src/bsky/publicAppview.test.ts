@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   fetchBskyHandleForDid,
+  fetchBskyPublicProfileForDid,
   resolveAtHandleToDid,
   searchActorsTypeahead,
 } from '@/bsky/publicAppview';
@@ -10,6 +11,37 @@ describe('publicAppview', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('fetchBskyPublicProfileForDid returns handle and avatar', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          handle: 'Bob.Bsky.Social',
+          avatar: 'https://cdn.example/avatar.jpg',
+        }),
+      }),
+    );
+    await expect(fetchBskyPublicProfileForDid('did:plc:bob')).resolves.toEqual({
+      handle: 'bob.bsky.social',
+      avatarUrl: 'https://cdn.example/avatar.jpg',
+    });
+  });
+
+  it('fetchBskyPublicProfileForDid ignores non-http avatar', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ handle: 'x.test', avatar: 'data:image/png;base64,xx' }),
+      }),
+    );
+    await expect(fetchBskyPublicProfileForDid('did:plc:x')).resolves.toEqual({
+      handle: 'x.test',
+      avatarUrl: null,
+    });
   });
 
   it('fetchBskyHandleForDid returns lowercase handle', async () => {

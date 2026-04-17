@@ -9,6 +9,7 @@ import {
   setSlot,
   type SongPriorityState,
 } from '@/pvp/songPriorityStore';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import { isE2eMode, setE2ePriorityHud, setE2eStatus } from '@/util/e2eFlags';
 import { getStorageDid } from '@/util/storageDid';
 
@@ -25,6 +26,7 @@ export class SongPrefsScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     if (!requirePlaySession(this)) {
       return;
     }

@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { requirePlaySession } from '@/auth/requirePlaySession';
 import { playDataFromMagnet } from '@/songSelect/torrentPlayData';
 import { digitIndexFromKey, SONG_SELECT_ROWS } from '@/songSelect/songSelectRows';
+import { syncAccountMenuForGameScene } from '@/ui/accountMenuHud';
 import { setE2eStatus } from '@/util/e2eFlags';
 
 export class SongSelectScene extends Phaser.Scene {
@@ -11,6 +12,7 @@ export class SongSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    syncAccountMenuForGameScene(this.scene.key);
     if (!requirePlaySession(this)) {
       return;
     }
