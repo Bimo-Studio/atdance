@@ -8,18 +8,24 @@ import {
 import { fetchBskyHandleForDid, resolveAtHandleToDid } from './bskyPublic';
 import type { RelayWorkerEnv } from './workerEnv';
 
+/** Strip trailing `/` so `https://app/` in env matches browser `Origin: https://app`. */
+function normalizeBrowserOrigin(o: string): string {
+  return o.trim().replace(/\/$/, '');
+}
+
 function parseAllowedOrigins(raw: string | undefined): string[] {
   if (raw === undefined || raw.trim() === '') {
     return ['*'];
   }
   return raw
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => normalizeBrowserOrigin(s))
     .filter(Boolean);
 }
 
 function corsHeaders(request: Request, env: RelayWorkerEnv): Record<string, string> {
-  const origin = request.headers.get('Origin');
+  const originRaw = request.headers.get('Origin');
+  const origin = originRaw === null ? null : normalizeBrowserOrigin(originRaw);
   const list = parseAllowedOrigins(env.ATDANCE_APP_ORIGINS);
   let allow: string | null = null;
   if (list.includes('*')) {

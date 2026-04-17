@@ -278,6 +278,8 @@ User’s browser
 
 **CORS** is not the same as WebSockets; the Worker must accept WebSocket upgrades (your `relay` code already does). **Mixed content:** the page is HTTPS, so the relay must be **`wss://`**, not `ws://`.
 
+**Relay HTTP + admin UI:** The `/admin` app calls **`https://relay…/admin/allowlist/v1`** with an **`Authorization`** header, so the browser sends a **CORS preflight**. The Worker only adds `Access-Control-Allow-Origin` when the request **`Origin`** is allowed by **`ATDANCE_APP_ORIGINS`** (comma-separated; use `*` only if you understand the tradeoffs). If that list omits **`https://dance.malldao.xyz`** (or uses a trailing slash mismatch), you will see **“No Access-Control-Allow-Origin”** in the console. Set the var on the **Worker** (Wrangler `[vars]` or Cloudflare **Workers → Settings → Variables**), then **`pnpm relay:deploy`**.
+
 ---
 
 ## 6. Verify checklist
@@ -293,14 +295,15 @@ User’s browser
 
 ## 7. Troubleshooting
 
-| Symptom                                                                              | Things to check                                                                                                                                             |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sync Lab never connects                                                              | **`VITE_RELAY_WS`** wrong or missing; typo (`wss` not `https`). Redeploy after env change.                                                                  |
-| Works locally, not on Vercel                                                         | Production build has **no** dev default relay; env must be set on Vercel.                                                                                   |
-| OAuth fails on production                                                            | Redirect URI / client metadata not updated for the **new** hostname.                                                                                        |
-| `invalid_client_metadata` / **Unauthorized** fetching `…/oauth-client-metadata.json` | **Deployment Protection** on Vercel (or similar) blocking **server** fetches — disable for that env or use a public URL; confirm with `curl -sI` → **200**. |
-| `inject.js` / `content.js` / JSON-RPC **`32603`**                                    | Usually a **browser extension**, not ATDance — ignore or test in a clean profile.                                                                           |
-| 404 on `/songs/...`                                                                  | Path wrong or rewrite misconfiguration; default `vercel.json` does **not** rewrite `/songs`.                                                                |
+| Symptom                                                                              | Things to check                                                                                                                                                |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sync Lab never connects                                                              | **`VITE_RELAY_WS`** wrong or missing; typo (`wss` not `https`). Redeploy after env change.                                                                     |
+| Works locally, not on Vercel                                                         | Production build has **no** dev default relay; env must be set on Vercel.                                                                                      |
+| OAuth fails on production                                                            | Redirect URI / client metadata not updated for the **new** hostname.                                                                                           |
+| `invalid_client_metadata` / **Unauthorized** fetching `…/oauth-client-metadata.json` | **Deployment Protection** on Vercel (or similar) blocking **server** fetches — disable for that env or use a public URL; confirm with `curl -sI` → **200**.    |
+| `inject.js` / `content.js` / JSON-RPC **`32603`**                                    | Usually a **browser extension**, not ATDance — ignore or test in a clean profile.                                                                              |
+| 404 on `/songs/...`                                                                  | Path wrong or rewrite misconfiguration; default `vercel.json` does **not** rewrite `/songs`.                                                                   |
+| Admin / allowlist fetch blocked by CORS (`No Access-Control-Allow-Origin`)           | Worker **`ATDANCE_APP_ORIGINS`** must include **`https://dance.malldao.xyz`** (exact app origin, no trailing slash). Redeploy the **relay** after changing it. |
 
 ---
 

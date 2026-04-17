@@ -6,7 +6,10 @@ compatibility_date = "2025-01-01"
 [vars]
 INVITE_ONLY = "1"
 ATPROTO_ALLOWLIST_DIDS = "did:plc:ya2boguixgy4757qqtw7gwch, did:plc:qdsp7mb3o7irmv7whyjexy7g, did:plc:dzvxvsiy3maw4iarpvizsj67, did:plc:7mnpet2pvof2llhpcwattscf"
-# Browser origins allowed to call relay HTTP (allowlist check + admin API). `*` is dev-friendly; production: comma-separated https://app… URLs.
+# Browser origins allowed to call relay HTTP (allowlist check + admin API with Authorization).
+# `*` reflects the request Origin (ok for dev). Production: list every app origin, no trailing slashes,
+# e.g. https://dance.malldao.xyz,https://atdance.vercel.app — must include the exact host that serves /admin.
+# Cloudflare dashboard vars override these [vars] on deploy if set.
 ATDANCE_APP_ORIGINS = "*"
 # Admin API + UI: only this handle (default distributed.camp). ATDANCE_ADMIN_HANDLE=distributed.camp
 

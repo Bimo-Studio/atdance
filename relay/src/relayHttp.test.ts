@@ -189,4 +189,17 @@ describe('handleRelayHttp', () => {
     });
     expect(resBad.headers.get('access-control-allow-origin')).toBeNull();
   });
+
+  it('matches Origin when ATDANCE_APP_ORIGINS entry has trailing slash', async () => {
+    const req = new Request('https://relay.test/admin/allowlist/v1', {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://good.test', 'Access-Control-Request-Method': 'GET' },
+    });
+    const res = await handleRelayHttp(req, {
+      ...baseEnv,
+      ATDANCE_APP_ORIGINS: 'https://good.test/',
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://good.test');
+  });
 });
