@@ -25,6 +25,7 @@
     "src/**/*.d.ts",
     "relay/**/*.ts",
     "scripts/syncAcknowledgementsAssets.ts",
+    "scripts/syncAcknowledgementsAssets.test.ts",
     "vite.config.ts",
     "vitest.config.ts"
   ]

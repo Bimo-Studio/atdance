@@ -1,15 +1,17 @@
 /**
  * Copies timidity WASM + FreePats instruments into public/midi-engine/ and
- * writes public/midi/credits.mid (deterministic short loop).
+ * writes public/midi/midi-manifest.json listing every *.mid in public/midi/.
  * Invoked from Vite `buildStart` (dev + production build).
+ *
+ * Add .mid files under public/midi/ — they are served as /midi/*.mid and the
+ * Acknowledgements scene picks one at random from the manifest.
+ * Do not generate MIDI here; `credits.mid` is never included (ignored if present).
  */
-import { copyFileSync, cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, copyFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import type { Dirent } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import type { MidiEvent } from 'midi-file';
-import { writeMidi } from 'midi-file';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -21,64 +23,28 @@ function rmDir(dir: string): void {
   }
 }
 
-function writeCreditsMidi(outPath: string): void {
-  const ticksPerBeat = 480;
-  const step = Math.floor(ticksPerBeat / 8);
-  const events: MidiEvent[] = [
-    { deltaTime: 0, meta: true, type: 'setTempo', microsecondsPerBeat: 480_000 },
-    { deltaTime: 0, meta: true, type: 'trackName', text: 'ATDance credits' },
-    {
-      deltaTime: 0,
-      meta: true,
-      type: 'timeSignature',
-      numerator: 4,
-      denominator: 4,
-      metronome: 24,
-      thirtyseconds: 8,
-    },
-    { deltaTime: 0, channel: 0, type: 'programChange', programNumber: 6 },
-  ];
-  const melody = [60, 64, 67, 72, 67, 64, 60, 62, 65, 69, 65, 62];
-  for (const note of melody) {
-    events.push({ deltaTime: 0, channel: 0, type: 'noteOn', noteNumber: note, velocity: 88 });
-    events.push({
-      deltaTime: step * 3,
-      channel: 0,
-      type: 'noteOff',
-      noteNumber: note,
-      velocity: 0,
-    });
-    events.push({
-      deltaTime: step,
-      channel: 0,
-      type: 'noteOn',
-      noteNumber: note + 12,
-      velocity: 55,
-    });
-    events.push({
-      deltaTime: step * 2,
-      channel: 0,
-      type: 'noteOff',
-      noteNumber: note + 12,
-      velocity: 0,
-    });
-    events.push({ deltaTime: step, channel: 0, type: 'noteOn', noteNumber: note, velocity: 44 });
-    events.push({
-      deltaTime: step * 2,
-      channel: 0,
-      type: 'noteOff',
-      noteNumber: note,
-      velocity: 0,
-    });
-  }
-  events.push({ deltaTime: ticksPerBeat, meta: true, type: 'endOfTrack' });
+/** Legacy / generated file — never listed for playback (user-supplied MIDIs only). */
+const EXCLUDED_MIDI_BASENAMES = new Set(['credits.mid']);
 
-  const midi = {
-    header: { format: 0 as const, numTracks: 1, ticksPerBeat: ticksPerBeat },
-    tracks: [events],
-  };
-  mkdirSync(dirname(outPath), { recursive: true });
-  writeFileSync(outPath, Buffer.from(writeMidi(midi)));
+function isUsableMidiBasename(name: string): boolean {
+  if (!name.toLowerCase().endsWith('.mid')) {
+    return false;
+  }
+  return !EXCLUDED_MIDI_BASENAMES.has(name.toLowerCase());
+}
+
+/** Sorted basenames of MIDI files in `midiDir` (non-recursive). */
+export function discoverMidiTrackNames(midiDir: string): string[] {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(midiDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => e.isFile() && isUsableMidiBasename(e.name))
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 export function syncAcknowledgementsAssets(): void {
@@ -94,5 +60,12 @@ export function syncAcknowledgementsAssets(): void {
   cpSync(join(freepatsDir, 'Drum_000'), join(engineDest, 'Drum_000'), { recursive: true });
   cpSync(join(freepatsDir, 'Tone_000'), join(engineDest, 'Tone_000'), { recursive: true });
 
-  writeCreditsMidi(join(root, 'public/midi/credits.mid'));
+  const midiPublic = join(root, 'public/midi');
+  mkdirSync(midiPublic, { recursive: true });
+  const tracks = discoverMidiTrackNames(midiPublic);
+  writeFileSync(
+    join(midiPublic, 'midi-manifest.json'),
+    `${JSON.stringify({ tracks }, null, 2)}\n`,
+    'utf8',
+  );
 }

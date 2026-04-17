@@ -10,3 +10,6 @@ relay/.wrangler
 *.log
 playwright-report
 test-results
+
+# Legacy generated cue — Acknowledgements uses only user-supplied .mid under public/midi/
+public/midi/credits.mid

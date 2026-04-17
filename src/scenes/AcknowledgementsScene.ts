@@ -15,7 +15,7 @@ const CREDIT_LINES = [
   'Vitest · Playwright · ESLint · Prettier',
   'ATProto / OAuth client bits in-repo',
   'WebTorrent · Hyperswarm · related P2P glue',
-  'timidity (WebAssembly) · FreePats · midi-file',
+  'timidity (WebAssembly) · FreePats — background music in this scene',
   '',
   '— TOOLING & TESTS —',
   'pnpm · Git · GitHub Actions',
@@ -228,10 +228,13 @@ export class AcknowledgementsScene extends Phaser.Scene {
       H * 0.08,
       H * 0.62,
     );
+    /** vx = cos(θ), vy = sin(θ); θ in (-π, 0) => vy < 0 (up). Narrow old range skewed up-left. */
     const straightUp = Math.random() < 0.03;
+    const angleWideMin = -Math.PI + 0.18;
+    const angleWideMax = -0.32;
     const angle = straightUp
       ? Phaser.Math.FloatBetween(-Math.PI / 2 - 0.06, -Math.PI / 2 + 0.06)
-      : Phaser.Math.FloatBetween(-2.88, -1.72);
+      : Phaser.Math.FloatBetween(angleWideMin, angleWideMax);
     const speed = Phaser.Math.FloatBetween(FW_LAUNCH_SPEED * 0.92, FW_LAUNCH_SPEED * 1.18);
     const vx = Math.cos(angle) * speed;
     const vy = Math.sin(angle) * speed;
@@ -346,8 +349,24 @@ export class AcknowledgementsScene extends Phaser.Scene {
       trace('import timidity');
       const { default: Timidity } = await import('timidity');
       const basePath = `${window.location.origin}${import.meta.env.BASE_URL}midi-engine/`;
-      const midiUrl = `${window.location.origin}${import.meta.env.BASE_URL}midi/credits.mid`;
-      trace('paths', { basePath, midiUrl });
+      const midiBase = `${window.location.origin}${import.meta.env.BASE_URL}midi/`;
+      const manifestUrl = `${midiBase}midi-manifest.json`;
+      trace('fetch manifest', { manifestUrl });
+      const manRes = await fetch(manifestUrl);
+      if (!manRes.ok) {
+        throw new Error(`midi-manifest.json HTTP ${manRes.status}`);
+      }
+      const manifest = (await manRes.json()) as { tracks?: string[] };
+      const tracks = (manifest.tracks ?? []).filter(
+        (t) => t !== '' && !t.includes('/') && t.toLowerCase() !== 'credits.mid',
+      );
+      if (tracks.length === 0) {
+        trace('no tracks in midi manifest');
+        return;
+      }
+      const pick = tracks[Math.floor(Math.random() * tracks.length)]!;
+      const midiUrl = `${midiBase}${encodeURIComponent(pick)}`;
+      trace('paths', { basePath, midiUrl, pick, trackCount: tracks.length });
       const player = new Timidity(basePath) as unknown as TimidityPlayer;
       this.timidityPlayer = player;
 

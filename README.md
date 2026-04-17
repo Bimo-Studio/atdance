@@ -11,17 +11,17 @@ Browser rhythm game for **dance.malldao.xyz**. See `plan.md` for the full roadma
 
 ## Commands
 
-| Command              | Description                                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`       | Install dependencies                                                                                                                                    |
-| `pnpm dev`           | Vite dev server — title → **song select** (minimal, SynRG, 6jan, Forkbomb); chart + audio bytes cache in **IndexedDB** (`idb-keyval`) after first fetch |
-| `pnpm build`         | Typecheck + production bundle                                                                                                                           |
-| `pnpm test`          | Vitest (unit tests under `src/**/*.test.ts` and `relay/**/*.test.ts`). Layered test **plans**: `docs/test-plans.md`.                                    |
-| `pnpm test:coverage` | Vitest with coverage report; **CI** enforces **≥ 50%** lines/statements (see `vitest.config.ts`).                                                       |
-| `pnpm e2e`           | Playwright smoke against **`vite preview`** (run `pnpm build` first). Installs browsers once with `pnpm e2e:install` (`playwright install chromium`).   |
-| `pnpm lint`          | ESLint                                                                                                                                                  |
-| `pnpm format`        | Prettier write                                                                                                                                          |
-| `pnpm relay:dev`     | Cloudflare Worker — WebSocket **ping/pong** clock sync (NTP-style); use with **Sync Lab** (title **T**)                                                 |
+| Command              | Description                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`       | Install dependencies                                                                                                                                        |
+| `pnpm dev`           | Vite dev server — title → **song select** (minimal, SynRG, 6jan2002, Forkbomb); chart + audio bytes cache in **IndexedDB** (`idb-keyval`) after first fetch |
+| `pnpm build`         | Typecheck + production bundle                                                                                                                               |
+| `pnpm test`          | Vitest (unit tests under `src/**/*.test.ts` and `relay/**/*.test.ts`). Layered test **plans**: `docs/test-plans.md`.                                        |
+| `pnpm test:coverage` | Vitest with coverage report; **CI** enforces **≥ 50%** lines/statements (see `vitest.config.ts`).                                                           |
+| `pnpm e2e`           | Playwright smoke against **`vite preview`** (run `pnpm build` first). Installs browsers once with `pnpm e2e:install` (`playwright install chromium`).       |
+| `pnpm lint`          | ESLint                                                                                                                                                      |
+| `pnpm format`        | Prettier write                                                                                                                                              |
+| `pnpm relay:dev`     | Cloudflare Worker — WebSocket **ping/pong** clock sync (NTP-style); use with **Sync Lab** (title **T**)                                                     |
 
 ## Architecture (high level)
 
@@ -140,5 +140,5 @@ StepMania `.sm` / `.ssc` support is **post-MVP** (see `plan.md`).
 - **Deploy (Vercel + Cloudflare Worker + DNS):** step-by-step guide for beginners: [`docs/deployment-vercel-cloudflare.md`](docs/deployment-vercel-cloudflare.md). **Lowest $ / lowest ops:** [`docs/deployment-shoestring.md`](docs/deployment-shoestring.md).
 - **Static app:** target production URL `https://dance.malldao.xyz` (or Vercel / Cloudflare Pages). CI builds a static `dist/`; deploy that folder.
 - **Relay Worker:** deploy `relay/` with Wrangler; set `VITE_RELAY_WS` / `VITE_PUBLIC_RELAY_WS` to the deployed `wss://` URL. **Cold starts** clear in-memory queue state; acceptable for MVP sync proof (see `plan.md` Appendix B).
-- **Demo charts on disk (maintainer):** reference pydance tree `beatgen/pydance/songs/` (SynRG, 6jan, Forkbomb). This repo ships a **minimal** subset under `public/songs/` for HTTP loading; do not add large binaries without checking license.
+- **Demo charts on disk (maintainer):** reference pydance tree `beatgen/pydance/songs/` (SynRG, 6jan2002, Forkbomb). This repo ships a **minimal** subset under `public/songs/` for HTTP loading; do not add large binaries without checking license.
 - **Env template:** `.env.example` lists `VITE_RELAY_WS` and optional `VITE_ATPROTO_PDS_HOST`.

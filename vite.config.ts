@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
+import type { Plugin as EsbuildPlugin } from 'esbuild';
 
 import { defineConfig, type Plugin } from 'vite';
 
@@ -26,6 +27,12 @@ const buildGitSha = resolveBuildGitSha(process.env, tryGitRevShort());
 
 /** Public site origin for OAuth `client_id` JSON (Vercel / Cloudflare Pages / manual). */
 function deploymentSiteUrl(): string | undefined {
+  // Prefer explicit canonical URL: on Vercel, VERCEL_URL is always *.vercel.app, so builds
+  // would otherwise bake the wrong redirect_uris when users sign in on a custom domain.
+  const manual = process.env.VITE_PUBLIC_APP_ORIGIN?.trim();
+  if (manual) {
+    return manual.replace(/\/$/, '');
+  }
   const vercel = process.env.VERCEL_URL?.trim();
   if (vercel) {
     return `https://${vercel}`;
@@ -33,10 +40,6 @@ function deploymentSiteUrl(): string | undefined {
   const cf = process.env.CF_PAGES_URL?.trim();
   if (cf) {
     return cf.startsWith('http') ? cf.replace(/\/$/, '') : `https://${cf}`;
-  }
-  const manual = process.env.VITE_PUBLIC_APP_ORIGIN?.trim();
-  if (manual) {
-    return manual.replace(/\/$/, '');
   }
   return undefined;
 }
@@ -71,9 +74,41 @@ function acknowledgementsAssetsPlugin(): Plugin {
   };
 }
 
-/** timidity expects brfs to inline `freepats.cfg`; Vite inlines it here instead. */
-function timidityInlineFreepatsPlugin(): Plugin {
+function inlineTimidityFreepatsInSource(code: string): string {
   const inlined = `const TIMIDITY_CFG = ${JSON.stringify(timidityFreepatsCfg)}`;
+  let next = code.replace("const fs = require('fs')\n", '');
+  next = next.replace(
+    `// Inlined at build time by 'brfs' browserify transform
+const TIMIDITY_CFG = fs.readFileSync(
+  __dirname + '/freepats.cfg', // eslint-disable-line node/no-path-concat
+  'utf8'
+)`,
+    inlined,
+  );
+  if (next.includes('fs.readFileSync')) {
+    throw new Error('atdance-timidity-inline-freepats: failed to inline timidity freepats.cfg');
+  }
+  return next;
+}
+
+/** Dev: run while esbuild pre-bundles `timidity` so `require()` is compiled away and cfg is inlined. */
+function timidityEsbuildInlineFreepatsPlugin(): EsbuildPlugin {
+  return {
+    name: 'atdance-timidity-esbuild-inline-freepats',
+    setup(build) {
+      build.onLoad({ filter: /[\\/]timidity[\\/]index\.js$/ }, (args) => {
+        const code = readFileSync(args.path, 'utf8');
+        if (!code.includes('TIMIDITY_CFG')) {
+          return null;
+        }
+        return { contents: inlineTimidityFreepatsInSource(code), loader: 'js' };
+      });
+    },
+  };
+}
+
+/** Production Rollup: same inlining for `node_modules/timidity/index.js`. */
+function timidityInlineFreepatsPlugin(): Plugin {
   return {
     name: 'atdance-timidity-inline-freepats',
     enforce: 'pre',
@@ -85,19 +120,7 @@ function timidityInlineFreepatsPlugin(): Plugin {
       if (!code.includes('TIMIDITY_CFG')) {
         return null;
       }
-      let next = code.replace("const fs = require('fs')\n", '');
-      next = next.replace(
-        `// Inlined at build time by 'brfs' browserify transform
-const TIMIDITY_CFG = fs.readFileSync(
-  __dirname + '/freepats.cfg', // eslint-disable-line node/no-path-concat
-  'utf8'
-)`,
-        inlined,
-      );
-      if (next.includes('fs.readFileSync')) {
-        throw new Error('atdance-timidity-inline-freepats: failed to inline timidity freepats.cfg');
-      }
-      return next;
+      return inlineTimidityFreepatsInSource(code);
     },
   };
 }
@@ -167,11 +190,11 @@ export default defineConfig({
   optimizeDeps: {
     // `webtorrent` is aliased to the prebuilt `min.js` — do not list
     // `webtorrent/dist/...` here (Vite 6 + Node 24 can double-resolve to ENOTDIR).
-    include: ['buffer', 'hyperswarm-web', 'debug', 'events'],
-    // `timidity` must NOT be pre-bundled: esbuild skips our `timidityInlineFreepatsPlugin`
-    // (deps land in `.vite/deps/timidity.js`, not `timidity/index.js`), so `freepats.cfg`
-    // would never be inlined and `fs.readFileSync` breaks in the browser.
-    exclude: ['webtorrent', 'timidity'],
+    include: ['buffer', 'hyperswarm-web', 'timidity', 'debug', 'events'],
+    exclude: ['webtorrent'],
+    esbuildOptions: {
+      plugins: [timidityEsbuildInlineFreepatsPlugin()],
+    },
   },
   server: {
     /** IPv4 loopback so `curl http://127.0.0.1:<port>` and ATProto OAuth callbacks match `redirect_uri`. */

@@ -17,12 +17,12 @@ export const SONG_SELECT_ROWS: readonly SongSelectRow[] = [
     data: { chartUrl: '/songs/synrg/synrg.dance', chartIndex: 1 },
   },
   {
-    label: '4 — 6jan · TRICK',
-    data: { chartUrl: '/songs/6jan/6jan.dance', chartIndex: 0 },
+    label: '4 — 6jan2002 · TRICK',
+    data: { chartUrl: '/songs/6jan2002/6jan2002.dance', chartIndex: 0 },
   },
   {
-    label: '5 — 6jan · MANIAC',
-    data: { chartUrl: '/songs/6jan/6jan.dance', chartIndex: 1 },
+    label: '5 — 6jan2002 · MANIAC',
+    data: { chartUrl: '/songs/6jan2002/6jan2002.dance', chartIndex: 1 },
   },
   {
     label: '6 — Forkbomb',

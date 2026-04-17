@@ -8,9 +8,11 @@
  * (ATProto allows only `http://localhost` + query on loopback client IDs).
  *
  * **HTTPS (Vercel, Cloudflare Pages, etc.):** use `BrowserOAuthClient.load` with a hosted
- * `client_id` URL. Build emits `oauth-client-metadata.json` when `VERCEL_URL`, `CF_PAGES_URL`,
- * or `VITE_PUBLIC_APP_ORIGIN` is set; otherwise set `VITE_ATPROTO_OAUTH_CLIENT_ID` or rely on
- * `${origin}/oauth-client-metadata.json` at runtime (file must exist in `dist`).
+ * `client_id` URL. Build emits `oauth-client-metadata.json` when `VITE_PUBLIC_APP_ORIGIN`,
+ * `VERCEL_URL`, or `CF_PAGES_URL` is set (canonical deploy URL should match sign-in origin —
+ * use `VITE_PUBLIC_APP_ORIGIN` for a custom domain on Vercel); otherwise set
+ * `VITE_ATPROTO_OAUTH_CLIENT_ID` or rely on `${origin}/oauth-client-metadata.json` at runtime
+ * (file must exist in `dist`).
  */
 import { BrowserOAuthClient } from '@atproto/oauth-client-browser';
 import { buildAtprotoLoopbackClientMetadata } from '@atproto/oauth-types';
